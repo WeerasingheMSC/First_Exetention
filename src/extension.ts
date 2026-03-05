@@ -3,6 +3,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
+import { exec } from "child_process";
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -44,15 +45,27 @@ export function activate(context: vscode.ExtensionContext) {
 				return { name, type };
 			});
 
-			// Prompt user for port number
-				const Port = await vscode.window.showInputBox({
-				placeHolder: "Enter Port Number (example: 3000)",
-			});
-
 			// select the language for the project
 			const language = await vscode.window.showQuickPick(["JavaScript", "TypeScript"], {
 				placeHolder: "Select the language for the project",
 			});
+
+			//select the database for the project
+			const database = await vscode.window.showQuickPick(["MongoDB","MySql","Postgresql"], {
+				placeHolder: "Select the database for the project",
+			});
+
+	        const dblink = await vscode.window.showInputBox({
+				placeHolder: "Enter the database connection string (example: mongodb://localhost:27017/mydb)",
+			});
+
+			// Validate database connection string		
+			if (!dblink) {
+				vscode.window.showErrorMessage("Database connection string is required!");
+				return;
+			}
+             
+			const db = database === "MongoDB" ? "mongoose" : database === "MySql" ? "mysql2" : "pg";
 
 			// Validate language selection
 			if (!language) {
@@ -63,8 +76,16 @@ export function activate(context: vscode.ExtensionContext) {
 			// Set file extensions based on language selection
 			const Exe = language === "TypeScript" ? "ts" : "js";
 
+
+			// Prompt user for port number
+				const Port = await vscode.window.showInputBox({
+				placeHolder: "Enter Port Number (example: 3000)",
+			});
+
+			
+
 			// Capitalize the first letter of the module name
-			const ModuleName = capitalize(moduleName || '');
+			const ModuleName = capitalize(moduleName || '' , { fields, "": '' });
 
 			
 			// get the root path of the workspace
@@ -77,13 +98,94 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 
 			// Create folders: models, controllers, routes
-			const folders = ["models", "controllers", "routes"];
+			const folders = ["models", "controllers", "routes","DB"];
 
 			// Create folders if they don't exist
 			folders.forEach((folder) => {
 				const folderPath = path.join(rootPath, folder);
 				if (!fs.existsSync(folderPath)) fs.mkdirSync(folderPath);
 			});
+
+			// package.json generate
+            const packageJsonPath = path.join(rootPath, "package.json");
+			if (!fs.existsSync(packageJsonPath)) {
+				const install = await vscode.window.showInformationMessage(
+					"package.json not found. Do you want to create one and install dependencies?",
+					"Yes",
+					"No"
+				);
+			if (install === "Yes") {
+				await vscode.window.withProgress(
+					{
+						location: vscode.ProgressLocation.Notification,
+						title: "Setting up project...",
+						cancellable: false,
+					},
+					async () => {
+						await new Promise<void>((resolve, reject) => {
+							exec(
+								'npm init -y', { cwd: rootPath },
+								(error, stdout, stderr) => {
+									if (error) {
+										vscode.window.showErrorMessage(`Error initializing npm: ${error.message}`);
+										reject(error);
+										return;
+									}
+									if (stderr) {
+										vscode.window.showErrorMessage(`npm error: ${stderr}`);
+										reject(new Error(stderr));
+										return;
+									}
+									vscode.window.showInformationMessage('npm initialized successfully!');
+									resolve();
+								}
+							);
+						});
+					}
+				);
+			}
+
+		const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+
+        const dependencies = packageJson.dependencies || {};
+
+		const required = ['express', db ,'jsonwebtoken','dotenv','cors','bcryptjs','nodemon'];
+
+		const missing = required.filter(dep => !dependencies[dep]);
+
+		if (missing.length > 0) {
+  				// ask install only missing ones
+				const installDeps = await vscode.window.showInformationMessage(
+					`Missing dependencies: ${missing.join(', ')}. Do you want to install them?`,
+					"Yes",
+					"No"
+				);
+				if (installDeps === "Yes") {
+					vscode.window.withProgress(
+						{
+							location: vscode.ProgressLocation.Notification,
+							title: "Installing dependencies...",
+							cancellable: false,
+						},
+						async () => {
+							exec(
+								`npm install ${missing.join(' ')}`, { cwd: rootPath },
+								(error, stdout, stderr) => {
+									if (error) {
+										vscode.window.showErrorMessage(`Error installing dependencies: ${error.message}`);
+										return;
+									}
+									if (stderr) {
+										vscode.window.showErrorMessage(`npm error: ${stderr}`);
+										return;
+									}
+									vscode.window.showInformationMessage('Dependencies installed successfully!');
+								}
+							);
+						}
+					);
+				}
+			}
             
 			// Model
 			fs.writeFileSync(
@@ -161,6 +263,22 @@ export function activate(context: vscode.ExtensionContext) {
 				 };`
 			);
 
+			//DB
+			fs.writeFileSync(
+				path.join(rootPath, "DB", `db.${Exe}`),
+				`import ${db} from '${dblink}';
+				 import dotenv from 'dotenv';
+				 dotenv.config();
+
+				 ${db}.connect((err) => {
+					 if (err) {
+						 console.error('Database connection error:', err);
+					 } else {
+						 console.log('Connected to the database successfully!');
+					 }
+				 });`
+			);
+
 			// ROUTE
 			fs.writeFileSync(
 				path.join(rootPath, 'routes', `${ModuleName}.routes.${Exe}`),
@@ -216,9 +334,9 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showInformationMessage(
 				`${ModuleName} module generated successfully!`
 			);
-			},
+			}
   
-		);
+});
 
   context.subscriptions.push(disposable);
 }
