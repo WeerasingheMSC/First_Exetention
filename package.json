@@ -9,16 +9,46 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": ["onCommand:my-first-extension.generateMernModule"],
+  "activationEvents": [
+    "onCommand:my-first-extension.generateMernModule",
+    "onCommand:my-first-extension.generateAuth",
+    "onView:backendGeneratorSidebar"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command" : "my-first-extension.generateMernModule",
-        "title": "Generate Mern Module"
+        "command": "my-first-extension.generateMernModule",
+        "title": "Generate Backend Module"
+      },
+      {
+        "command": "my-first-extension.generateAuth",
+        "title": "Generate Auth Module"
+      },
+      {
+        "command": "my-first-extension.openSidebar",
+        "title": "Open Backend Generator"
       }
-      
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "backendGenerator",
+          "title": "Backend Generator",
+          "icon": "images/sidebar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "backendGenerator": [
+        {
+          "type": "webview",
+          "id": "backendGeneratorSidebar",
+          "name": "Backend Generator",
+          "icon": "images/sidebar-icon.svg"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

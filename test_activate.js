@@ -1,0 +1,1 @@
+const proxy = new Proxy({}, { get: () => proxy }); const m = require('module'); const original = m._load; m._load = function(request, parent, isMain) { if (request === 'vscode') return proxy; return original.apply(this, arguments); }; try { require('./dist/extension.js'); console.log('OK'); } catch (e) { console.error('ERROR', e); }
