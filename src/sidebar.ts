@@ -1,14 +1,19 @@
 import * as vscode from "vscode";
 
 export type SidebarMessage =
-  | { command: "generateModule"; moduleName: string; fields: string; language: string; database: string; dblink: string; port: string }
-  | { command: "generateAuth"; language: string };
+  | { command: "generateModule"; moduleName: string; fields: string; language: string; database: string; dblink: string; port: string; structure: string }
+  | { command: "generateAuth"; language: string }
+  | { command: "generateFullBackend"; moduleName: string; fields: string; language: string; database: string; dblink: string; port: string }
+  | { command: "addModule"; moduleName: string; fields: string };
 
 export class BackendGeneratorSidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewId = "backendGeneratorSidebar";
   private _view?: vscode.WebviewView;
 
-  constructor(private readonly _extensionUri: vscode.Uri) {}
+  constructor(
+    private readonly _extensionUri: vscode.Uri,
+    private readonly _context: vscode.ExtensionContext
+  ) {}
 
   // Called by VS Code when the sidebar becomes visible
   resolveWebviewView(
@@ -18,7 +23,8 @@ export class BackendGeneratorSidebarProvider implements vscode.WebviewViewProvid
   ): void {
     this._view = webviewView;
     webviewView.webview.options = { enableScripts: true };
-    webviewView.webview.html = this._getHtml();
+    const backendGenerated = this._context.workspaceState.get<boolean>('backendGenerated', false);
+    webviewView.webview.html = this._getHtml(backendGenerated);
 
     webviewView.webview.onDidReceiveMessage(async (msg: SidebarMessage) => {
       try {
@@ -34,6 +40,18 @@ export class BackendGeneratorSidebarProvider implements vscode.WebviewViewProvid
             "my-first-extension.generateAuthFromSidebar",
             msg
           );
+        } else if (msg.command === "generateFullBackend") {
+          vscode.window.showInformationMessage("Sidebar: Generate Full Backend clicked.");
+          await vscode.commands.executeCommand(
+            "my-first-extension.generateFullBackendFromSidebar",
+            msg
+          );
+        } else if (msg.command === "addModule") {
+          vscode.window.showInformationMessage(`Sidebar: Adding module ${msg.moduleName}...`);
+          await vscode.commands.executeCommand(
+            "my-first-extension.addModuleToBackend",
+            msg
+          );
         }
       } catch (err) {
         vscode.window.showErrorMessage(`Sidebar Error: ${(err as Error).message}`);
@@ -47,7 +65,14 @@ export class BackendGeneratorSidebarProvider implements vscode.WebviewViewProvid
     this._view?.webview.postMessage({ command: "status", text, type });
   }
 
-  private _getHtml(): string {
+  /** Tell the sidebar a backend was successfully generated — switches to add-module mode */
+  public postBackendGenerated(): void {
+    this._context.workspaceState.update('backendGenerated', true);
+    this._view?.webview.postMessage({ command: "backendGenerated" });
+  }
+
+  private _getHtml(backendGenerated: boolean): string {
+    const bgFlag = backendGenerated ? "true" : "false";
     return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -227,6 +252,8 @@ export class BackendGeneratorSidebarProvider implements vscode.WebviewViewProvid
 <div class="tabs">
   <button class="tab active" id="tabModule">📦 Module</button>
   <button class="tab"        id="tabAuth">🔐 Auth</button>
+  <button class="tab"        id="tabFull">🚀 Full</button>
+  <button class="tab"        id="tabAdd">➕ Add</button>
 </div>
 
 <!-- Module Panel -->
@@ -243,7 +270,7 @@ export class BackendGeneratorSidebarProvider implements vscode.WebviewViewProvid
     <div class="hint">Format: fieldName:type  — types: string · number · boolean · date</div>
   </div>
 
-  <div class="form-group">
+  <div class="form-group" id="fgLanguage">
     <label>Language</label>
     <select id="language">
       <option value="TypeScript">TypeScript</option>
@@ -251,7 +278,7 @@ export class BackendGeneratorSidebarProvider implements vscode.WebviewViewProvid
     </select>
   </div>
 
-  <div class="form-group">
+  <div class="form-group" id="fgDatabase">
     <label>Database</label>
     <select id="database">
       <option value="MongoDB">MongoDB</option>
@@ -260,14 +287,24 @@ export class BackendGeneratorSidebarProvider implements vscode.WebviewViewProvid
     </select>
   </div>
 
-  <div class="form-group">
+  <div class="form-group" id="fgDblink">
     <label>Connection String</label>
     <input id="dblink" type="text" placeholder="mongodb://localhost:27017/mydb" />
   </div>
 
-  <div class="form-group">
+  <div class="form-group" id="fgPort">
     <label>Port</label>
     <input id="port" type="text" placeholder="3000" value="3000" />
+  </div>
+
+  <div class="form-group" id="fgStructure">
+    <label>Folder Structure</label>
+    <select id="structure">
+      <option value="simple">Simple (flat)</option>
+      <option value="advanced">Advanced (src/)</option>
+      <option value="clean">Clean Architecture</option>
+    </select>
+    <div class="hint" id="structureHint">models/  controllers/  routes/  DB/</div>
   </div>
 
   <button class="btn" id="btnModule">
@@ -308,6 +345,93 @@ export class BackendGeneratorSidebarProvider implements vscode.WebviewViewProvid
   </button>
 </div>
 
+<!-- Full Backend Panel -->
+<div id="tab-full" class="panel">
+  <p style="font-size:11px;opacity:0.7;margin-bottom:12px;line-height:1.5;">
+    One click generates a complete <strong>Advanced</strong> backend — module + auth + server + config.
+  </p>
+  <div style="font-family:monospace;font-size:10px;opacity:0.6;line-height:1.7;margin-bottom:12px;padding:6px 8px;background:var(--vscode-terminal-background,#1e1e1e);border-radius:4px;">
+    src/ ├ controllers/ ├ models/ ├ routes/<br/>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;├ services/ ├ middleware/ ├ utils/ └ config/<br/>
+    .env&nbsp; server.ts&nbsp; package.json&nbsp; tsconfig.json
+  </div>
+
+  <div class="form-group">
+    <label>Module Name</label>
+    <input id="fullModuleName" type="text" placeholder="e.g. Product" />
+  </div>
+
+  <div class="form-group">
+    <label>Fields</label>
+    <input id="fullFields" type="text" placeholder="name:string, price:number" />
+    <div class="hint">Format: fieldName:type</div>
+  </div>
+
+  <div class="form-group">
+    <label>Language</label>
+    <select id="fullLanguage">
+      <option value="TypeScript">TypeScript</option>
+      <option value="JavaScript">JavaScript</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>Database</label>
+    <select id="fullDatabase">
+      <option value="MongoDB">MongoDB</option>
+      <option value="MySQL">MySQL</option>
+      <option value="PostgreSQL">PostgreSQL</option>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>Connection String</label>
+    <input id="fullDblink" type="text" placeholder="mongodb://localhost:27017/mydb" />
+  </div>
+
+  <div class="form-group">
+    <label>Port</label>
+    <input id="fullPort" type="text" placeholder="3000" value="3000" />
+  </div>
+
+  <button class="btn" id="btnFull" style="margin-top:8px;">
+    🚀 Generate Full Backend
+  </button>
+</div>
+
+<!-- Add Module Panel -->
+<div id="tab-add" class="panel">
+  <div style="font-size:11px;padding:8px 10px;margin-bottom:12px;border-radius:4px;background:var(--vscode-editorInfo-background,#1e3a5f);border:1px solid var(--vscode-editorInfo-border,#4fc3f7);color:var(--vscode-editorInfo-foreground,#90caf9);line-height:1.6;">
+    🔍 <strong>Auto-detects</strong> your project's language, database &amp; folder structure.<br/>
+    Generates model + controller + routes and updates <code>server.ts/js</code> automatically.
+  </div>
+
+  <div class="form-group">
+    <label>Module Name</label>
+    <input id="addModuleName" type="text" placeholder="e.g. Order" />
+  </div>
+
+  <div class="form-group">
+    <label>Fields</label>
+    <input id="addFields" type="text" placeholder="name:string, qty:number" />
+    <div class="hint">Format: fieldName:type  — types: string · number · boolean · date</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div style="font-size:10px;opacity:0.55;margin-bottom:6px;">What gets generated</div>
+  <div style="font-size:11px;line-height:1.9;opacity:0.75;">
+    📄 [modelsDir] / ModuleName<br/>
+    📄 [controllersDir] / ModuleName.controller<br/>
+    📄 [routesDir] / ModuleName.routes<br/>
+    🔄 server.ts/js  ←  route mount added automatically
+  </div>
+
+  <button class="btn" id="btnAdd" style="margin-top:14px;">
+    ➕ Add Module to Backend
+  </button>
+</div>
+
 <!-- Log -->
 <div class="divider"></div>
 <div class="log-header">Output</div>
@@ -316,21 +440,36 @@ export class BackendGeneratorSidebarProvider implements vscode.WebviewViewProvid
 <script>
   const vscode = acquireVsCodeApi();
 
+  // ── Init: switch to Add tab if backend was already generated ──────────────
+  if (${bgFlag}) { switchTab('add'); }
+
   // ── Attach event listeners after DOM is ready ─────────────────────────────
   document.getElementById('tabModule').addEventListener('click', () => switchTab('module'));
   document.getElementById('tabAuth').addEventListener('click',   () => switchTab('auth'));
+  document.getElementById('tabFull').addEventListener('click',   () => switchTab('full'));
+  document.getElementById('tabAdd').addEventListener('click',    () => switchTab('add'));
   document.getElementById('database').addEventListener('change', updatePlaceholder);
+  document.getElementById('structure').addEventListener('change', updateStructureHint);
+  document.getElementById('fullDatabase').addEventListener('change', updateFullPlaceholder);
   document.getElementById('btnModule').addEventListener('click', submitModule);
   document.getElementById('btnAuth').addEventListener('click',   submitAuth);
   document.getElementById('btnCopy').addEventListener('click',   copyMountSnippet);
+  document.getElementById('btnFull').addEventListener('click',   submitFull);
+  document.getElementById('btnAdd').addEventListener('click',    submitAddModule);
 
   // ── Tab switching ──────────────────────────────────────────────────────────
   function switchTab(name) {
     document.querySelectorAll('.tab').forEach((t, i) => {
-      t.classList.toggle('active', (i === 0 && name === 'module') || (i === 1 && name === 'auth'));
+      t.classList.toggle('active',
+        (i === 0 && name === 'module') ||
+        (i === 1 && name === 'auth')   ||
+        (i === 2 && name === 'full')   ||
+        (i === 3 && name === 'add'));
     });
     document.getElementById('tab-module').classList.toggle('active', name === 'module');
     document.getElementById('tab-auth').classList.toggle('active',   name === 'auth');
+    document.getElementById('tab-full').classList.toggle('active',   name === 'full');
+    document.getElementById('tab-add').classList.toggle('active',    name === 'add');
   }
 
   // ── Update DB placeholder ──────────────────────────────────────────────────
@@ -344,23 +483,84 @@ export class BackendGeneratorSidebarProvider implements vscode.WebviewViewProvid
     document.getElementById('dblink').placeholder = placeholders[db];
   }
 
+  // ── Update structure hint ──────────────────────────────────────────────────
+  const structureHints = {
+    simple:   'models/  controllers/  routes/  DB/',
+    advanced: 'src/models/  src/controllers/  src/routes/  src/config/',
+    clean:    'src/domain/models/  src/presentation/controllers/  src/infrastructure/db/',
+  };
+  function updateStructureHint() {
+    document.getElementById('structureHint').textContent = structureHints[document.getElementById('structure').value];
+  }
+
+  // ── Update Full Backend DB placeholder ────────────────────────────────────
+  function updateFullPlaceholder() {
+    const db = document.getElementById('fullDatabase').value;
+    document.getElementById('fullDblink').placeholder = placeholders[db];
+  }
+
   // ── Submit Module ──────────────────────────────────────────────────────────
   function submitModule() {
     try {
       const moduleName = document.getElementById('moduleName').value.trim();
       const fields     = document.getElementById('fields').value.trim();
+
+      if (!moduleName) { log('Module name is required.', 'error'); return; }
+      if (!/^[A-Za-z][A-Za-z0-9]*$/.test(moduleName)) { log("Module name must start with a letter and contain only letters and digits (e.g. Product).", 'error'); return; }
+      if (!fields)     { log('Fields are required.',      'error'); return; }
+
       const language   = document.getElementById('language').value;
       const database   = document.getElementById('database').value;
       const dblink     = document.getElementById('dblink').value.trim();
       const port       = document.getElementById('port').value.trim() || '3000';
 
-      if (!moduleName) { log('Module name is required.', 'error'); return; }
-      if (!fields)     { log('Fields are required.',      'error'); return; }
-      if (!dblink)     { log('Connection string is required.', 'error'); return; }
+      if (!dblink) { log('Connection string is required.', 'error'); return; }
 
       setLoading('btnModule', true);
       log('Starting module generation...', 'info');
-      vscode.postMessage({ command: 'generateModule', moduleName, fields, language, database, dblink, port });
+      const structure = document.getElementById('structure').value;
+      vscode.postMessage({ command: 'generateModule', moduleName, fields, language, database, dblink, port, structure });
+    } catch (e) {
+      log('UI Error: ' + e.message, 'error');
+    }
+  }
+
+  // ── Submit Full Backend ────────────────────────────────────────────────────
+  function submitFull() {
+    try {
+      const moduleName = document.getElementById('fullModuleName').value.trim();
+      const fields     = document.getElementById('fullFields').value.trim();
+      const language   = document.getElementById('fullLanguage').value;
+      const database   = document.getElementById('fullDatabase').value;
+      const dblink     = document.getElementById('fullDblink').value.trim();
+      const port       = document.getElementById('fullPort').value.trim() || '3000';
+
+      if (!moduleName) { log('Module name is required.', 'error'); return; }
+      if (!/^[A-Za-z][A-Za-z0-9]*$/.test(moduleName)) { log("Module name must start with a letter and contain only letters and digits (e.g. Product).", 'error'); return; }
+      if (!fields)     { log('Fields are required.',      'error'); return; }
+      if (!dblink)     { log('Connection string is required.', 'error'); return; }
+
+      setLoading('btnFull', true);
+      log('Starting full backend generation (Advanced structure)...', 'info');
+      vscode.postMessage({ command: 'generateFullBackend', moduleName, fields, language, database, dblink, port });
+    } catch (e) {
+      log('UI Error: ' + e.message, 'error');
+    }
+  }
+
+  // ── Submit Add Module ──────────────────────────────────────────────────────
+  function submitAddModule() {
+    try {
+      const moduleName = document.getElementById('addModuleName').value.trim();
+      const fields     = document.getElementById('addFields').value.trim();
+
+      if (!moduleName) { log('Module name is required.', 'error'); return; }
+      if (!/^[A-Za-z][A-Za-z0-9]*$/.test(moduleName)) { log("Module name must start with a letter and contain only letters and digits (e.g. Order).", 'error'); return; }
+      if (!fields)     { log('Fields are required.',     'error'); return; }
+
+      setLoading('btnAdd', true);
+      log('Detecting project structure and adding module...', 'info');
+      vscode.postMessage({ command: 'addModule', moduleName, fields });
     } catch (e) {
       log('UI Error: ' + e.message, 'error');
     }
@@ -410,8 +610,17 @@ export class BackendGeneratorSidebarProvider implements vscode.WebviewViewProvid
 
   function setLoading(btnId, loading) {
     const btn = document.getElementById(btnId);
+    if (!btn) { return; }
     btn.disabled = loading;
-    btn.textContent = loading ? '⏳ Working...' : (btnId === 'btnModule' ? '▶ Generate Module' : '▶ Generate Auth');
+    if (btnId === 'btnModule') {
+      btn.textContent = loading ? '⏳ Working...' : '▶ Generate Module';
+    } else if (btnId === 'btnAuth') {
+      btn.textContent = loading ? '⏳ Working...' : '▶ Generate Auth';
+    } else if (btnId === 'btnFull') {
+      btn.textContent = loading ? '⏳ Working...' : '🚀 Generate Full Backend';
+    } else if (btnId === 'btnAdd') {
+      btn.textContent = loading ? '⏳ Adding...' : '➕ Add Module to Backend';
+    }
   }
 
   // ── Receive messages from extension ───────────────────────────────────────
@@ -422,7 +631,12 @@ export class BackendGeneratorSidebarProvider implements vscode.WebviewViewProvid
       if (type === 'success' || type === 'error') {
         setLoading('btnModule', false);
         setLoading('btnAuth',   false);
+        setLoading('btnFull',   false);
+        setLoading('btnAdd',    false);
       }
+    } else if (command === 'backendGenerated') {
+      switchTab('add');
+      log('Backend generated — use the ➕ Add tab to add more modules.', 'success');
     }
   });
 </script>

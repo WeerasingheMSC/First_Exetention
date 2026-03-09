@@ -28,6 +28,14 @@
       {
         "command": "my-first-extension.openSidebar",
         "title": "Open Backend Generator"
+      },
+      {
+        "command": "my-first-extension.generateFullBackendFromSidebar",
+        "title": "Generate Full Backend"
+      },
+      {
+        "command": "my-first-extension.addModuleToBackend",
+        "title": "Add Module to Backend"
       }
     ],
     "viewsContainers": {

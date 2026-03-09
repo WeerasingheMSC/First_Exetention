@@ -29,6 +29,85 @@ function runCommand(command: string, cwd: string): Promise<void> {
 	});
 }
 
+// ─── Structure Layouts ───────────────────────────────────────────────────────
+
+interface StructureLayout {
+	folders: string[];
+	modelsDir: string;
+	controllersDir: string;
+	routesDir: string;
+	dbDir: string;
+	middlewareDir: string;
+	modelImportInController: string;
+	dbImportInController: string;
+	controllerImportInRoute: string;
+	routeImportInServer: (ModuleName: string) => string;
+	authRouteImportInServer: string;
+	dbImportInServer: string;
+	userModelImportInAuthController: string;
+	authControllerImportInAuthRoute: string;
+	authMiddlewareImportInAuthRoute: string;
+}
+
+function getStructureLayout(structure: string): StructureLayout {
+	switch (structure) {
+		case "advanced":
+			return {
+				folders: ["src/models", "src/controllers", "src/routes", "src/services", "src/middleware", "src/utils", "src/config"],
+				modelsDir: "src/models",
+				controllersDir: "src/controllers",
+				routesDir: "src/routes",
+				dbDir: "src/config",
+				middlewareDir: "src/middleware",
+				modelImportInController: "../models",
+				dbImportInController: "../config/db",
+				controllerImportInRoute: "../controllers",
+				routeImportInServer: (M: string) => `./src/routes/${M}.routes`,
+				authRouteImportInServer: "./src/routes/auth.routes",
+				dbImportInServer: "./src/config/db",
+				userModelImportInAuthController: "../models/User",
+				authControllerImportInAuthRoute: "../controllers/auth.controller",
+				authMiddlewareImportInAuthRoute: "../middleware/auth.middleware",
+			};
+		case "clean":
+			return {
+				folders: ["src/domain/models", "src/application/services", "src/infrastructure/db", "src/presentation/controllers", "src/presentation/routes", "src/presentation/middleware", "src/utils"],
+				modelsDir: "src/domain/models",
+				controllersDir: "src/presentation/controllers",
+				routesDir: "src/presentation/routes",
+				dbDir: "src/infrastructure/db",
+				middlewareDir: "src/presentation/middleware",
+				modelImportInController: "../../domain/models",
+				dbImportInController: "../../infrastructure/db/db",
+				controllerImportInRoute: "../controllers",
+				routeImportInServer: (M: string) => `./src/presentation/routes/${M}.routes`,
+				authRouteImportInServer: "./src/presentation/routes/auth.routes",
+				dbImportInServer: "./src/infrastructure/db/db",
+				userModelImportInAuthController: "../../domain/models/User",
+				authControllerImportInAuthRoute: "../controllers/auth.controller",
+				authMiddlewareImportInAuthRoute: "../middleware/auth.middleware",
+			};
+		default: // simple
+			return {
+				folders: ["models", "controllers", "routes", "DB", "middleware"],
+				modelsDir: "models",
+				controllersDir: "controllers",
+				routesDir: "routes",
+				dbDir: "DB",
+				middlewareDir: "middleware",
+				modelImportInController: "../models",
+				dbImportInController: "../DB/db",
+				controllerImportInRoute: "../controllers",
+				routeImportInServer: (M: string) => `./routes/${M}.routes`,
+				authRouteImportInServer: "./routes/auth.routes",
+				dbImportInServer: "./DB/db",
+				userModelImportInAuthController: "../models/User",
+				authControllerImportInAuthRoute: "../controllers/auth.controller",
+				authMiddlewareImportInAuthRoute: "../middleware/auth.middleware",
+			};
+	}
+}
+
 // ─── File generators ────────────────────────────────────────────────────────
 
 function generateEnv(port: string, db: string, dblink: string): string {
@@ -44,7 +123,7 @@ function generateTsConfig(): string {
 				lib: ["ES2020"],
 				outDir: "./dist",
 				rootDir: "./",
-				strict: false,
+				strict: true,
 				esModuleInterop: true,
 				skipLibCheck: true,
 				resolveJsonModule: true,
@@ -176,9 +255,9 @@ export const tableName = '${ModuleName.toLowerCase()}s';
 
 // ── Controllers ──────────────────────────────────────────────────────────────
 
-function generateMongooseController(ModuleName: string, moduleName: string, exe: string): string {
+function generateMongooseController(ModuleName: string, moduleName: string, exe: string, modelImport = "../models"): string {
 	return `import { Request, Response } from 'express';
-import ${ModuleName} from '../models/${ModuleName}';
+import ${ModuleName} from '${modelImport}/${ModuleName}';
 
 export const create${ModuleName} = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -236,7 +315,8 @@ function generateSqlController(
 	moduleName: string,
 	fields: { name: string; type: string }[],
 	db: string,
-	exe: string
+	exe: string,
+	dbImport = "../DB/db"
 ): string {
 	const table = `${moduleName}s`;
 	const cols = fields.map((f) => f.name).join(", ");
@@ -244,14 +324,9 @@ function generateSqlController(
 	const updates = fields.map((f, i) => `${f.name} = $${i + 1}`).join(", ");
 	const lastIdx = fields.length + 1;
 
-	const poolImport =
-		db === "mysql2"
-			? `import pool from '../DB/db';`
-			: `import pool from '../DB/db';`;
-
 	if (db === "mysql2") {
 		return `import { Request, Response } from 'express';
-import pool from '../DB/db';
+import pool from '${dbImport}';
 
 const table = '${table}';
 
@@ -315,7 +390,7 @@ export const delete${ModuleName} = async (req: Request, res: Response): Promise<
 
 	// pg
 	return `import { Request, Response } from 'express';
-import pool from '../DB/db';
+import pool from '${dbImport}';
 
 const table = '${table}';
 
@@ -379,7 +454,28 @@ export const delete${ModuleName} = async (req: Request, res: Response): Promise<
 
 // ── Routes ───────────────────────────────────────────────────────────────────
 
-function generateRoutes(ModuleName: string, exe: string): string {
+function generateRoutes(ModuleName: string, exe: string, ctrlImport = "../controllers"): string {
+	if (exe === "js") {
+		return `const express = require('express');
+const {
+  create${ModuleName},
+  get${ModuleName}s,
+  get${ModuleName}ById,
+  update${ModuleName},
+  delete${ModuleName},
+} = require('${ctrlImport}/${ModuleName}.controller');
+
+const router = express.Router();
+
+router.post('/', create${ModuleName});
+router.get('/', get${ModuleName}s);
+router.get('/:id', get${ModuleName}ById);
+router.put('/:id', update${ModuleName});
+router.delete('/:id', delete${ModuleName});
+
+module.exports = router;
+`;
+	}
 	return `import { Router } from 'express';
 import {
   create${ModuleName},
@@ -387,7 +483,7 @@ import {
   get${ModuleName}ById,
   update${ModuleName},
   delete${ModuleName},
-} from '../controllers/${ModuleName}.Controller';
+} from '${ctrlImport}/${ModuleName}.controller';
 
 const router = Router();
 
@@ -408,13 +504,14 @@ function generateServer(
 	moduleName: string,
 	port: string,
 	db: string,
-	exe: string
+	exe: string,
+	layout: StructureLayout = getStructureLayout("simple")
 ): string {
 	if (exe === "js") {
 		const dbRequire =
 			db === "mongoose"
-				? `const connectDB = require('./DB/db');`
-				: `const { testConnection } = require('./DB/db');`;
+				? `const connectDB = require('${layout.dbImportInServer}');`
+				: `const { testConnection } = require('${layout.dbImportInServer}');`;
 		const dbInit =
 			db === "mongoose"
 				? `connectDB();`
@@ -423,8 +520,8 @@ function generateServer(
 const cors = require('cors');
 require('dotenv').config();
 ${dbRequire}
-const ${moduleName}Router = require('./routes/${ModuleName}.routes');
-const authRouter = require('./routes/auth.routes');
+const ${moduleName}Router = require('${layout.routeImportInServer(ModuleName)}');
+const authRouter = require('${layout.authRouteImportInServer}');
 
 const app = express();
 const PORT = process.env.PORT || ${port};
@@ -453,8 +550,8 @@ module.exports = app;
 
 	const dbImport =
 		db === "mongoose"
-			? `import connectDB from './DB/db';`
-			: `import pool, { testConnection } from './DB/db';`;
+			? `import connectDB from '${layout.dbImportInServer}';`
+			: `import pool, { testConnection } from '${layout.dbImportInServer}';`;
 
 	const dbInit =
 		db === "mongoose"
@@ -465,8 +562,8 @@ module.exports = app;
 import cors from 'cors';
 import dotenv from 'dotenv';
 ${dbImport}
-import ${moduleName}Router from './routes/${ModuleName}.routes';
-import authRouter from './routes/auth.routes';
+import ${moduleName}Router from '${layout.routeImportInServer(ModuleName)}';
+import authRouter from '${layout.authRouteImportInServer}';
 
 dotenv.config();
 
@@ -497,6 +594,70 @@ export default app;
 
 // ─── Extension activation ────────────────────────────────────────────────────
 
+// Detect language / db / structure from an existing generated project
+function detectProjectConfig(rootPath: string): { exe: "ts" | "js"; db: string; layout: StructureLayout } {
+	const exe: "ts" | "js" = fs.existsSync(path.join(rootPath, "server.ts")) ? "ts" : "js";
+
+	let db = "mongoose";
+	const pkgPath = path.join(rootPath, "package.json");
+	if (fs.existsSync(pkgPath)) {
+		try {
+			const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+			const deps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+			if (deps["mysql2"]) { db = "mysql2"; }
+			else if (deps["pg"]) { db = "pg"; }
+		} catch { /* default to mongoose */ }
+	}
+
+	let structure = "simple";
+	if (fs.existsSync(path.join(rootPath, "src", "presentation"))) {
+		structure = "clean";
+	} else if (fs.existsSync(path.join(rootPath, "src", "controllers"))) {
+		structure = "advanced";
+	}
+
+	return { exe, db, layout: getStructureLayout(structure) };
+}
+
+// Insert a new line after the last line that matches `linePattern` (optionally preferring lines matching `routeHint`)
+function insertAfterLastMatch(content: string, linePattern: RegExp, newLine: string, routeHint?: RegExp): string {
+	const lines = content.split("\n");
+	let lastIdx = -1;
+
+	for (let i = 0; i < lines.length; i++) {
+		if (linePattern.test(lines[i]) && (!routeHint || routeHint.test(lines[i]))) {
+			lastIdx = i;
+		}
+	}
+	// fallback: match without routeHint
+	if (lastIdx === -1 && routeHint) {
+		for (let i = 0; i < lines.length; i++) {
+			if (linePattern.test(lines[i])) { lastIdx = i; }
+		}
+	}
+	if (lastIdx === -1) { return content + "\n" + newLine; }
+	lines.splice(lastIdx + 1, 0, newLine);
+	return lines.join("\n");
+}
+
+// Add a new route import + mount point to an existing server file
+function updateServerFile(content: string, ModuleName: string, moduleName: string, exe: string, layout: StructureLayout): string {
+	const routePath = layout.routeImportInServer(ModuleName);
+	const varName   = `${moduleName}Router`;
+	const newMount  = `app.use('/api/${moduleName}s', ${varName});`;
+
+	let updated: string;
+	if (exe === "ts") {
+		const newImport = `import ${varName} from '${routePath}';`;
+		updated = insertAfterLastMatch(content, /^import .+ from '.+';$/, newImport, /routes/);
+	} else {
+		const newRequire = `const ${varName} = require('${routePath}');`;
+		updated = insertAfterLastMatch(content, /^const \w+ = require\(/, newRequire, /routes/);
+	}
+	updated = insertAfterLastMatch(updated, /^app\.use\(['"]\/api\//, newMount);
+	return updated;
+}
+
 export function activate(context: vscode.ExtensionContext) {
 	const disposable = vscode.commands.registerCommand(
 		"my-first-extension.generateMernModule",
@@ -509,6 +670,10 @@ export function activate(context: vscode.ExtensionContext) {
 			});
 			if (!moduleName) {
 				vscode.window.showErrorMessage("Module name is required!");
+				return;
+			}
+			if (!/^[A-Za-z][A-Za-z0-9]*$/.test(moduleName)) {
+				vscode.window.showErrorMessage("Module name must start with a letter and contain only letters and digits (e.g. Product, UserProfile).");
 				return;
 			}
 
@@ -562,12 +727,20 @@ export function activate(context: vscode.ExtensionContext) {
 				value: "3000",
 			})) || "3000";
 
+			const structureChoice = await vscode.window.showQuickPick(
+				["Simple (flat folders)", "Advanced (src/ layout)", "Clean Architecture"],
+				{ placeHolder: "Select folder structure" }
+			);
+			if (!structureChoice) { return; }
+			const structureKey = structureChoice.startsWith("Advanced") ? "advanced" : structureChoice.startsWith("Clean") ? "clean" : "simple";
+
 			// ── 2. Derived values ──────────────────────────────────────────────
 
 			const ModuleName = capitalize(moduleName);
 			const exe = language === "TypeScript" ? "ts" : "js";
 			const db =
 				database === "MongoDB" ? "mongoose" : database === "MySQL" ? "mysql2" : "pg";
+			const layout = getStructureLayout(structureKey);
 
 			const rootPath = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
 			if (!rootPath) {
@@ -630,13 +803,12 @@ export function activate(context: vscode.ExtensionContext) {
 							"@types/bcryptjs",
 							"@types/jsonwebtoken",
 						]);
-						if (db === "mongoose") { devDeps.push("@types/mongoose"); }
 					}
 					await runCommand(`npm install --save-dev ${devDeps.join(" ")}`, rootPath);
 
 					// Step 4: Create folder structure
 					progress.report({ increment: 10, message: "Creating folder structure..." });
-					["models", "controllers", "routes", "DB"].forEach((folder) => {
+					layout.folders.forEach((folder) => {
 						const fp = path.join(rootPath, folder);
 						if (!fs.existsSync(fp)) { fs.mkdirSync(fp, { recursive: true }); }
 					});
@@ -669,14 +841,14 @@ export function activate(context: vscode.ExtensionContext) {
 					// Step 7: DB connection file
 					progress.report({ increment: 10, message: "Generating DB connection..." });
 					fs.writeFileSync(
-						path.join(rootPath, "DB", `db.${exe}`),
+						path.join(rootPath, layout.dbDir, `db.${exe}`),
 						generateDbFile(db, exe)
 					);
 
 					// Step 8: Model
 					progress.report({ increment: 10, message: "Generating model..." });
 					fs.writeFileSync(
-						path.join(rootPath, "models", `${ModuleName}.${exe}`),
+						path.join(rootPath, layout.modelsDir, `${ModuleName}.${exe}`),
 						generateModel(ModuleName, fields, db, exe)
 					);
 
@@ -684,25 +856,25 @@ export function activate(context: vscode.ExtensionContext) {
 					progress.report({ increment: 10, message: "Generating controller..." });
 					const controllerContent =
 						db === "mongoose"
-							? generateMongooseController(ModuleName, moduleName, exe)
-							: generateSqlController(ModuleName, moduleName, fields, db, exe);
+							? generateMongooseController(ModuleName, moduleName, exe, layout.modelImportInController)
+							: generateSqlController(ModuleName, moduleName, fields, db, exe, layout.dbImportInController);
 					fs.writeFileSync(
-						path.join(rootPath, "controllers", `${ModuleName}.Controller.${exe}`),
+						path.join(rootPath, layout.controllersDir, `${ModuleName}.controller.${exe}`),
 						controllerContent
 					);
 
 					// Step 10: Routes
 					progress.report({ increment: 10, message: "Generating routes..." });
 					fs.writeFileSync(
-						path.join(rootPath, "routes", `${ModuleName}.routes.${exe}`),
-						generateRoutes(ModuleName, exe)
+						path.join(rootPath, layout.routesDir, `${ModuleName}.routes.${exe}`),
+						generateRoutes(ModuleName, exe, layout.controllerImportInRoute)
 					);
 
 					// Step 11: Server
 					progress.report({ increment: 10, message: "Generating server..." });
 					fs.writeFileSync(
 						path.join(rootPath, `server.${exe}`),
-						generateServer(ModuleName, moduleName, port, db, exe)
+						generateServer(ModuleName, moduleName, port, db, exe, layout)
 					);
 
 					progress.report({ increment: 5, message: "Done!" });
@@ -757,7 +929,7 @@ export function activate(context: vscode.ExtensionContext) {
 					}
 					await runCommand("npm install bcryptjs jsonwebtoken dotenv mongoose express cors", rootPath);
 					if (language === "TypeScript") {
-						await runCommand("npm install --save-dev @types/bcryptjs @types/jsonwebtoken @types/node @types/express @types/cors @types/mongoose typescript ts-node", rootPath);
+						await runCommand("npm install --save-dev @types/bcryptjs @types/jsonwebtoken @types/node @types/express @types/cors typescript ts-node", rootPath);
 					}
 
 					// JWT middleware
@@ -807,7 +979,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// ─── Sidebar Webview ──────────────────────────────────────────────────────
 
-	const sidebarProvider = new BackendGeneratorSidebarProvider(context.extensionUri);
+	const sidebarProvider = new BackendGeneratorSidebarProvider(context.extensionUri, context);
 	context.subscriptions.push(
 		vscode.window.registerWebviewViewProvider(
 			BackendGeneratorSidebarProvider.viewId,
@@ -819,7 +991,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const sidebarModuleDisposable = vscode.commands.registerCommand(
 		"my-first-extension.generateMernModuleFromSidebar",
-		async (msg: { moduleName: string; fields: string; language: string; database: string; dblink: string; port: string }) => {
+		async (msg: { moduleName: string; fields: string; language: string; database: string; dblink: string; port: string; structure: string }) => {
 			console.log("[BackendGen] generateMernModuleFromSidebar called", msg);
 			vscode.window.showInformationMessage(`Extension: Generating ${msg.language} module with ${msg.database}`);
 
@@ -832,7 +1004,7 @@ export function activate(context: vscode.ExtensionContext) {
 			console.log("[BackendGen] rootPath =", rootPath);
 			sidebarProvider.postStatus(`Generating in: ${rootPath}`, "info");
 
-			const { moduleName, fields: fieldInput, language, database, dblink, port } = msg;
+			const { moduleName, fields: fieldInput, language, database, dblink, port, structure = "simple" } = msg;
 			const ModuleName = capitalize(moduleName);
 			const exe = language === "TypeScript" ? "ts" : "js";
 			const db = database === "MongoDB" ? "mongoose" : database === "MySQL" ? "mysql2" : "pg";
@@ -840,6 +1012,7 @@ export function activate(context: vscode.ExtensionContext) {
 				const [name, type] = f.split(":").map((p) => p.trim());
 				return { name, type: type || "string" };
 			});
+			const layout = getStructureLayout(structure);
 
 			try {
 				// ── Step 1: package.json ────────────────────────────────────────
@@ -863,7 +1036,7 @@ export function activate(context: vscode.ExtensionContext) {
 				fs.writeFileSync(packageJsonPath, JSON.stringify(pkgJson, null, 2));
 
 				// ── Step 2: Folders ────────────────────────────────────────────
-				["models", "controllers", "routes", "DB"].forEach((folder) => {
+				layout.folders.forEach((folder) => {
 					const fp = path.join(rootPath, folder);
 					if (!fs.existsSync(fp)) { fs.mkdirSync(fp, { recursive: true }); }
 				});
@@ -880,14 +1053,14 @@ export function activate(context: vscode.ExtensionContext) {
 
 				// ── Step 4: Source files ───────────────────────────────────────
 				sidebarProvider.postStatus("Writing source files...", "info");
-				fs.writeFileSync(path.join(rootPath, "DB", `db.${exe}`), generateDbFile(db, exe));
-				fs.writeFileSync(path.join(rootPath, "models", `${ModuleName}.${exe}`), generateModel(ModuleName, fields, db, exe));
+				fs.writeFileSync(path.join(rootPath, layout.dbDir, `db.${exe}`), generateDbFile(db, exe));
+				fs.writeFileSync(path.join(rootPath, layout.modelsDir, `${ModuleName}.${exe}`), generateModel(ModuleName, fields, db, exe));
 				const ctrl = db === "mongoose"
-					? generateMongooseController(ModuleName, moduleName, exe)
-					: generateSqlController(ModuleName, moduleName, fields, db, exe);
-				fs.writeFileSync(path.join(rootPath, "controllers", `${ModuleName}.Controller.${exe}`), ctrl);
-				fs.writeFileSync(path.join(rootPath, "routes", `${ModuleName}.routes.${exe}`), generateRoutes(ModuleName, exe));
-				fs.writeFileSync(path.join(rootPath, `server.${exe}`), generateServer(ModuleName, moduleName, port, db, exe));
+					? generateMongooseController(ModuleName, moduleName, exe, layout.modelImportInController)
+					: generateSqlController(ModuleName, moduleName, fields, db, exe, layout.dbImportInController);
+				fs.writeFileSync(path.join(rootPath, layout.controllersDir, `${ModuleName}.controller.${exe}`), ctrl);
+				fs.writeFileSync(path.join(rootPath, layout.routesDir, `${ModuleName}.routes.${exe}`), generateRoutes(ModuleName, exe, layout.controllerImportInRoute));
+				fs.writeFileSync(path.join(rootPath, `server.${exe}`), generateServer(ModuleName, moduleName, port, db, exe, layout));
 
 				sidebarProvider.postStatus("Files written! Installing dependencies in terminal...", "info");
 
@@ -896,7 +1069,6 @@ export function activate(context: vscode.ExtensionContext) {
 				let devDeps = ["nodemon"];
 				if (language === "TypeScript") {
 					devDeps = devDeps.concat(["typescript", "ts-node", "@types/node", "@types/express", "@types/cors", "@types/bcryptjs", "@types/jsonwebtoken"]);
-					if (db === "mongoose") { devDeps.push("@types/mongoose"); }
 				}
 
 				const terminal = vscode.window.createTerminal({
@@ -907,6 +1079,7 @@ export function activate(context: vscode.ExtensionContext) {
 				terminal.sendText(`npm install ${runtimeDeps.join(" ")} && npm install --save-dev ${devDeps.join(" ")} && echo "✅ Dependencies installed! Run: npm run dev"`);
 
 				sidebarProvider.postStatus(`✓ ${ModuleName} module files generated! See terminal for npm install progress. Run "npm run dev" once done.`, "success");
+				sidebarProvider.postBackendGenerated();
 				vscode.window.showInformationMessage(`Successfully generated ${ModuleName} module files! Check the terminal down below.`);
 				console.log("[BackendGen] Done — terminal opened for npm install");
 			} catch (err) {
@@ -935,10 +1108,11 @@ export function activate(context: vscode.ExtensionContext) {
 
 			const { language } = msg;
 			const exe = language === "TypeScript" ? "ts" : "js";
+			const { layout } = detectProjectConfig(rootPath);
 
 			try {
 				// ── Folders ────────────────────────────────────────────────────
-				["middleware", "controllers", "routes", "models"].forEach((f) => {
+				layout.folders.forEach((f) => {
 					const fp = path.join(rootPath, f);
 					if (!fs.existsSync(fp)) { fs.mkdirSync(fp, { recursive: true }); }
 				});
@@ -953,10 +1127,10 @@ export function activate(context: vscode.ExtensionContext) {
 
 				// ── Write auth files immediately ───────────────────────────────
 				sidebarProvider.postStatus("Writing auth files...", "info");
-				fs.writeFileSync(path.join(rootPath, "middleware", `auth.middleware.${exe}`), generateAuthMiddleware(exe));
-				fs.writeFileSync(path.join(rootPath, "models",     `User.${exe}`),            generateUserModel(exe));
-				fs.writeFileSync(path.join(rootPath, "controllers", `auth.controller.${exe}`), generateAuthController(exe));
-				fs.writeFileSync(path.join(rootPath, "routes",      `auth.routes.${exe}`),     generateAuthRoutes(exe));
+				fs.writeFileSync(path.join(rootPath, layout.middlewareDir,  `auth.middleware.${exe}`), generateAuthMiddleware(exe));
+				fs.writeFileSync(path.join(rootPath, layout.modelsDir,      `User.${exe}`),            generateUserModel(exe));
+				fs.writeFileSync(path.join(rootPath, layout.controllersDir, `auth.controller.${exe}`), generateAuthController(exe, layout.userModelImportInAuthController));
+				fs.writeFileSync(path.join(rootPath, layout.routesDir,      `auth.routes.${exe}`),     generateAuthRoutes(exe, layout.authControllerImportInAuthRoute, layout.authMiddlewareImportInAuthRoute));
 
 				const envPath = path.join(rootPath, ".env");
 				const envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, "utf8") : "";
@@ -968,7 +1142,7 @@ export function activate(context: vscode.ExtensionContext) {
 				sidebarProvider.postStatus("Files written! Installing dependencies in terminal...", "info");
 				const runtimeDeps = "bcryptjs jsonwebtoken dotenv mongoose express cors";
 				const devDeps = language === "TypeScript"
-					? "@types/bcryptjs @types/jsonwebtoken @types/node @types/express @types/cors @types/mongoose typescript ts-node"
+					? "@types/bcryptjs @types/jsonwebtoken @types/node @types/express @types/cors typescript ts-node"
 					: "";
 
 				const terminal = vscode.window.createTerminal({
@@ -1000,7 +1174,200 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	);
 
-	context.subscriptions.push(authDisposable, sidebarModuleDisposable, sidebarAuthDisposable, openSidebarDisposable);
+	// ─── Sidebar-driven: Generate Full Backend ────────────────────────────────
+
+	const fullBackendDisposable = vscode.commands.registerCommand(
+		"my-first-extension.generateFullBackendFromSidebar",
+		async (msg: { moduleName: string; fields: string; language: string; database: string; dblink: string; port: string }) => {
+			console.log("[BackendGen] generateFullBackendFromSidebar called", msg);
+			vscode.window.showInformationMessage("Backend Generator: Building full Advanced-structure backend...");
+
+			const rootPath = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
+			if (!rootPath) {
+				vscode.window.showErrorMessage("BackendGen: No folder open. Please open a folder first!");
+				sidebarProvider.postStatus("No folder open — use File → Open Folder first!", "error");
+				return;
+			}
+
+			const { moduleName, fields: fieldInput, language, database, dblink, port } = msg;
+			const ModuleName = capitalize(moduleName);
+			const exe = language === "TypeScript" ? "ts" : "js";
+			const db = database === "MongoDB" ? "mongoose" : database === "MySQL" ? "mysql2" : "pg";
+			const fields = fieldInput.split(",").map((f) => {
+				const [name, type] = f.split(":").map((p) => p.trim());
+				return { name, type: type || "string" };
+			});
+			const layout = getStructureLayout("advanced");
+
+			try {
+				sidebarProvider.postStatus("Creating Advanced project structure...", "info");
+
+				// ── package.json ──────────────────────────────────────────────
+				const packageJsonPath = path.join(rootPath, "package.json");
+				let pkgJson: Record<string, any> = {};
+				if (fs.existsSync(packageJsonPath)) {
+					try { pkgJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8")); } catch { pkgJson = {}; }
+				}
+				const folderName = path.basename(rootPath);
+				pkgJson.name = pkgJson.name || folderName.toLowerCase().replace(/\s+/g, "-");
+				pkgJson.version = pkgJson.version || "1.0.0";
+				pkgJson.description = pkgJson.description || "";
+				pkgJson.main = exe === "ts" ? "dist/server.js" : "server.js";
+				pkgJson.scripts = {
+					...(pkgJson.scripts || {}),
+					start: language === "TypeScript" ? "node dist/server.js" : "node server.js",
+					dev:   language === "TypeScript" ? "ts-node server.ts" : "nodemon server.js",
+					...(language === "TypeScript" ? { build: "tsc" } : {}),
+				};
+				fs.writeFileSync(packageJsonPath, JSON.stringify(pkgJson, null, 2));
+
+				// ── Folders ───────────────────────────────────────────────────
+				layout.folders.forEach((folder) => {
+					const fp = path.join(rootPath, folder);
+					if (!fs.existsSync(fp)) { fs.mkdirSync(fp, { recursive: true }); }
+				});
+
+				// ── Config files ──────────────────────────────────────────────
+				if (language === "TypeScript" && !fs.existsSync(path.join(rootPath, "tsconfig.json"))) {
+					fs.writeFileSync(path.join(rootPath, "tsconfig.json"), generateTsConfig());
+				}
+				fs.writeFileSync(path.join(rootPath, ".env"), generateEnv(port, db, dblink));
+				fs.writeFileSync(path.join(rootPath, ".env.example"), `PORT=${port}\nDB_URI=your_connection_string_here\nJWT_SECRET=your_super_secret_key_here\nJWT_EXPIRES_IN=7d\n`);
+				if (!fs.existsSync(path.join(rootPath, ".gitignore"))) {
+					fs.writeFileSync(path.join(rootPath, ".gitignore"), "node_modules/\n.env\ndist/\n");
+				}
+
+				// Append JWT secrets to .env if missing
+				const envContent = fs.readFileSync(path.join(rootPath, ".env"), "utf8");
+				if (!envContent.includes("JWT_SECRET")) {
+					fs.appendFileSync(path.join(rootPath, ".env"), "\nJWT_SECRET=your_super_secret_key_here\nJWT_EXPIRES_IN=7d\n");
+				}
+
+				// ── Module files ──────────────────────────────────────────────
+				sidebarProvider.postStatus("Writing module files...", "info");
+				fs.writeFileSync(path.join(rootPath, layout.dbDir, `db.${exe}`), generateDbFile(db, exe));
+				fs.writeFileSync(path.join(rootPath, layout.modelsDir, `${ModuleName}.${exe}`), generateModel(ModuleName, fields, db, exe));
+				const ctrl = db === "mongoose"
+					? generateMongooseController(ModuleName, moduleName, exe, layout.modelImportInController)
+					: generateSqlController(ModuleName, moduleName, fields, db, exe, layout.dbImportInController);
+				fs.writeFileSync(path.join(rootPath, layout.controllersDir, `${ModuleName}.controller.${exe}`), ctrl);
+				fs.writeFileSync(path.join(rootPath, layout.routesDir, `${ModuleName}.routes.${exe}`), generateRoutes(ModuleName, exe, layout.controllerImportInRoute));
+
+				// ── Auth files ────────────────────────────────────────────────
+				sidebarProvider.postStatus("Writing auth files...", "info");
+				fs.writeFileSync(path.join(rootPath, layout.middlewareDir, `auth.middleware.${exe}`), generateAuthMiddleware(exe));
+				fs.writeFileSync(path.join(rootPath, layout.modelsDir, `User.${exe}`), generateUserModel(exe));
+				fs.writeFileSync(path.join(rootPath, layout.controllersDir, `auth.controller.${exe}`), generateAuthController(exe, layout.userModelImportInAuthController));
+				fs.writeFileSync(path.join(rootPath, layout.routesDir, `auth.routes.${exe}`), generateAuthRoutes(exe, layout.authControllerImportInAuthRoute, layout.authMiddlewareImportInAuthRoute));
+
+				// ── Server ────────────────────────────────────────────────────
+				sidebarProvider.postStatus("Writing server file...", "info");
+				fs.writeFileSync(path.join(rootPath, `server.${exe}`), generateServer(ModuleName, moduleName, port, db, exe, layout));
+
+				sidebarProvider.postStatus("Files written! Installing dependencies...", "info");
+
+				// ── npm install ───────────────────────────────────────────────
+				const runtimeDeps = ["express", "cors", "dotenv", "bcryptjs", "jsonwebtoken", db];
+				let devDeps = ["nodemon"];
+				if (language === "TypeScript") {
+					devDeps = devDeps.concat(["typescript", "ts-node", "@types/node", "@types/express", "@types/cors", "@types/bcryptjs", "@types/jsonwebtoken"]);
+				}
+				const terminal = vscode.window.createTerminal({
+					name: "Backend Gen — Full Backend",
+					cwd: rootPath,
+				});
+				terminal.show(true);
+				terminal.sendText(`npm install ${runtimeDeps.join(" ")} && npm install --save-dev ${devDeps.join(" ")} && echo "✅ Full backend ready! Run: npm run dev"`);
+
+				sidebarProvider.postStatus(`✓ Full backend generated with Advanced structure! Module + Auth + Server. Run "npm run dev" after install.`, "success");
+				sidebarProvider.postBackendGenerated();
+				vscode.window.showInformationMessage(`🚀 Full backend (Advanced) generated for ${ModuleName}!`);
+			} catch (err) {
+				console.error("[BackendGen] Full backend error:", err);
+				const errorMsg = (err as Error).message || String(err);
+				vscode.window.showErrorMessage(`BackendGen Error: ${errorMsg}`);
+				sidebarProvider.postStatus(`Error: ${errorMsg}`, "error");
+			}
+		}
+	);
+
+	// ─── Sidebar-driven: Add Module to existing backend ──────────────────────
+
+	const addModuleDisposable = vscode.commands.registerCommand(
+		"my-first-extension.addModuleToBackend",
+		async (msg: { moduleName: string; fields: string }) => {
+			console.log("[BackendGen] addModuleToBackend called", msg);
+
+			const rootPath = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
+			if (!rootPath) {
+				vscode.window.showErrorMessage("BackendGen: No folder open!");
+				sidebarProvider.postStatus("No folder open — use File → Open Folder first!", "error");
+				return;
+			}
+
+			const { moduleName, fields: fieldInput } = msg;
+			if (!/^[A-Za-z][A-Za-z0-9]*$/.test(moduleName)) {
+				sidebarProvider.postStatus("Module name must start with a letter and contain only letters and digits (e.g. Product).", "error");
+				return;
+			}
+			const ModuleName = capitalize(moduleName);
+			const fields = fieldInput.split(",").map((f) => {
+				const [name, type] = f.split(":").map((p) => p.trim());
+				return { name, type: type || "string" };
+			});
+
+			try {
+				sidebarProvider.postStatus(`Detecting existing project config...`, "info");
+				const { exe, db, layout } = detectProjectConfig(rootPath);
+				sidebarProvider.postStatus(`Detected: ${exe === "ts" ? "TypeScript" : "JavaScript"}, ${db}, ${layout.modelsDir.startsWith("src/presentation") ? "Clean" : layout.modelsDir.startsWith("src/") ? "Advanced" : "Simple"} structure`, "info");
+
+				// Ensure target folders exist
+				[layout.modelsDir, layout.controllersDir, layout.routesDir].forEach((dir) => {
+					const fp = path.join(rootPath, dir);
+					if (!fs.existsSync(fp)) { fs.mkdirSync(fp, { recursive: true }); }
+				});
+
+				// Model
+				fs.writeFileSync(
+					path.join(rootPath, layout.modelsDir, `${ModuleName}.${exe}`),
+					generateModel(ModuleName, fields, db, exe)
+				);
+
+				// Controller
+				const ctrl = db === "mongoose"
+					? generateMongooseController(ModuleName, moduleName, exe, layout.modelImportInController)
+					: generateSqlController(ModuleName, moduleName, fields, db, exe, layout.dbImportInController);
+				fs.writeFileSync(path.join(rootPath, layout.controllersDir, `${ModuleName}.controller.${exe}`), ctrl);
+
+				// Routes
+				fs.writeFileSync(
+					path.join(rootPath, layout.routesDir, `${ModuleName}.routes.${exe}`),
+					generateRoutes(ModuleName, exe, layout.controllerImportInRoute)
+				);
+
+				// Update server file
+				const serverPath = path.join(rootPath, `server.${exe}`);
+				if (fs.existsSync(serverPath)) {
+					const serverContent = fs.readFileSync(serverPath, "utf8");
+					const updated = updateServerFile(serverContent, ModuleName, moduleName, exe, layout);
+					fs.writeFileSync(serverPath, updated);
+					sidebarProvider.postStatus(`server.${exe} updated with new route.`, "info");
+				} else {
+					sidebarProvider.postStatus(`Warning: server.${exe} not found — skipped server update.`, "info");
+				}
+
+				sidebarProvider.postStatus(`✓ Module ${ModuleName} added! model, controller, routes created and server updated.`, "success");
+				vscode.window.showInformationMessage(`✅ Module ${ModuleName} added to your backend!`);
+			} catch (err) {
+				console.error("[BackendGen] addModule error:", err);
+				const errorMsg = (err as Error).message || String(err);
+				vscode.window.showErrorMessage(`BackendGen Error: ${errorMsg}`);
+				sidebarProvider.postStatus(`Error: ${errorMsg}`, "error");
+			}
+		}
+	);
+
+	context.subscriptions.push(authDisposable, sidebarModuleDisposable, sidebarAuthDisposable, openSidebarDisposable, fullBackendDisposable, addModuleDisposable);
 }
 
 // ─── Auth file generators ─────────────────────────────────────────────────────
@@ -1111,17 +1478,17 @@ module.exports = mongoose.model('User', UserSchema);
 `;
 }
 
-function generateAuthController(exe: string): string {
+function generateAuthController(exe: string, userModelImport = "../models/User"): string {
 	return exe === "ts"
 		? `import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
-import User from '../models/User';
+import User from '${userModelImport}';
 dotenv.config();
 
-const signToken = (id: string) =>
-  jwt.sign({ id }, process.env.JWT_SECRET as string, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+const signToken = (id: unknown): string =>
+  jwt.sign({ id: String(id) }, process.env.JWT_SECRET as string, {
+    expiresIn: (process.env.JWT_EXPIRES_IN ?? '7d') as '7d',
   });
 
 export const register = async (req: Request, res: Response): Promise<void> => {
@@ -1130,7 +1497,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     const existing = await User.findOne({ email });
     if (existing) { res.status(409).json({ message: 'Email already in use' }); return; }
     const user = await User.create({ name, email, password });
-    const token = signToken((user._id as string).toString());
+    const token = signToken(user._id);
     res.status(201).json({ token, user: { id: user._id, name: user.name, email: user.email } });
   } catch (err) {
     res.status(500).json({ message: 'Registration failed', error: (err as Error).message });
@@ -1145,7 +1512,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       res.status(401).json({ message: 'Invalid email or password' });
       return;
     }
-    const token = signToken((user._id as string).toString());
+    const token = signToken(user._id);
     res.status(200).json({ token, user: { id: user._id, name: user.name, email: user.email } });
   } catch (err) {
     res.status(500).json({ message: 'Login failed', error: (err as Error).message });
@@ -1163,7 +1530,7 @@ export const getMe = async (req: any, res: Response): Promise<void> => {
 };
 `
 		: `const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const User = require('${userModelImport}');
 require('dotenv').config();
 
 const signToken = (id) =>
@@ -1210,11 +1577,11 @@ exports.getMe = async (req, res) => {
 `;
 }
 
-function generateAuthRoutes(exe: string): string {
+function generateAuthRoutes(exe: string, ctrlImport = "../controllers/auth.controller", mwImport = "../middleware/auth.middleware"): string {
 	return exe === "ts"
 		? `import { Router } from 'express';
-import { register, login, getMe } from '../controllers/auth.controller';
-import { authMiddleware } from '../middleware/auth.middleware';
+import { register, login, getMe } from '${ctrlImport}';
+import { authMiddleware } from '${mwImport}';
 
 const router = Router();
 
@@ -1225,8 +1592,8 @@ router.get('/me',        authMiddleware, getMe);
 export default router;
 `
 		: `const express = require('express');
-const { register, login, getMe } = require('../controllers/auth.controller');
-const authMiddleware = require('../middleware/auth.middleware');
+const { register, login, getMe } = require('${ctrlImport}');
+const authMiddleware = require('${mwImport}');
 
 const router = express.Router();
 
