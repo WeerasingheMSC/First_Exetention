@@ -9,11 +9,6 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:my-first-extension.generateMernModule",
-    "onCommand:my-first-extension.generateAuth",
-    "onView:backendGeneratorSidebar"
-  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
@@ -43,7 +38,7 @@
         {
           "id": "backendGenerator",
           "title": "Backend Generator",
-          "icon": "images/sidebar-icon.svg"
+          "icon": "$(server-environment)"
         }
       ]
     },
@@ -53,7 +48,7 @@
           "type": "webview",
           "id": "backendGeneratorSidebar",
           "name": "Backend Generator",
-          "icon": "images/sidebar-icon.svg"
+          "icon": "$(server-environment)"
         }
       ]
     }

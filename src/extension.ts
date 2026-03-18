@@ -42,6 +42,7 @@ interface StructureLayout {
 	dbImportInController: string;
 	controllerImportInRoute: string;
 	routeImportInServer: (ModuleName: string) => string;
+	modelImportInServer: (ModuleName: string) => string;
 	authRouteImportInServer: string;
 	dbImportInServer: string;
 	userModelImportInAuthController: string;
@@ -63,6 +64,7 @@ function getStructureLayout(structure: string): StructureLayout {
 				dbImportInController: "../config/db",
 				controllerImportInRoute: "../controllers",
 				routeImportInServer: (M: string) => `./src/routes/${M}.routes`,
+				modelImportInServer: (M: string) => `./src/models/${M}`,
 				authRouteImportInServer: "./src/routes/auth.routes",
 				dbImportInServer: "./src/config/db",
 				userModelImportInAuthController: "../models/User",
@@ -81,6 +83,7 @@ function getStructureLayout(structure: string): StructureLayout {
 				dbImportInController: "../../infrastructure/db/db",
 				controllerImportInRoute: "../controllers",
 				routeImportInServer: (M: string) => `./src/presentation/routes/${M}.routes`,
+				modelImportInServer: (M: string) => `./src/domain/models/${M}`,
 				authRouteImportInServer: "./src/presentation/routes/auth.routes",
 				dbImportInServer: "./src/infrastructure/db/db",
 				userModelImportInAuthController: "../../domain/models/User",
@@ -99,6 +102,7 @@ function getStructureLayout(structure: string): StructureLayout {
 				dbImportInController: "../DB/db",
 				controllerImportInRoute: "../controllers",
 				routeImportInServer: (M: string) => `./routes/${M}.routes`,
+				modelImportInServer: (M: string) => `./models/${M}`,
 				authRouteImportInServer: "./routes/auth.routes",
 				dbImportInServer: "./DB/db",
 				userModelImportInAuthController: "../models/User",
@@ -216,40 +220,129 @@ function generateModel(
 	ModuleName: string,
 	fields: { name: string; type: string }[],
 	db: string,
-	exe: string
+	exe: string,
+	dbImport: string = "../config/db"
 ): string {
 	if (db === "mongoose") {
 		const schemaFields = fields
 			.map((f) => `  ${f.name}: { type: ${mongooseTypeMap(f.type)}, required: true }`)
 			.join(",\n");
-		return `import mongoose from 'mongoose';
+		return exe === "ts"
+			? `import mongoose from 'mongoose';\n\nconst ${ModuleName}Schema = new mongoose.Schema(\n  {\n${schemaFields}\n  },\n  { timestamps: true }\n);\n\nexport default mongoose.model('${ModuleName}', ${ModuleName}Schema);\n`
+			: `const mongoose = require('mongoose');\n\nconst ${ModuleName}Schema = new mongoose.Schema(\n  {\n${schemaFields}\n  },\n  { timestamps: true }\n);\n\nmodule.exports = mongoose.model('${ModuleName}', ${ModuleName}Schema);\n`;
+	}
 
-const ${ModuleName}Schema = new mongoose.Schema(
-  {
-${schemaFields}
+	const tableName = `${ModuleName.toLowerCase()}s`;
+	const sqlFields = fields.map((f) => `  ${f.name}: ${f.type === 'number' ? 'number' : f.type === 'boolean' ? 'boolean' : f.type === 'date' ? 'Date' : 'string'};`).join("\n");
+	const tableDefs = fields.map((f) => `      ${f.name} ${sqlTypeMap(f.type)}`).join(",\n");
+	const isMysql = db === "mysql2";
+	
+	const createParams = fields.map((f) => `${f.name}: ${f.type}`).join(", ");
+	const createArgs = fields.map((f) => f.name).join(", ");
+	const queryMethod = isMysql ? "execute" : "query";
+	const insertPlaceholders = isMysql ? fields.map(() => "?").join(", ") : fields.map((_, i) => `$${i + 1}`).join(", ");
+
+	if (exe === "ts") {
+		return `import pool from '${dbImport}';
+
+export interface I${ModuleName} {
+  id: number;
+${sqlFields}
+  created_at: Date;
+}
+
+export const init${ModuleName}sTable = async (): Promise<void> => {
+  await pool.${queryMethod}(\`
+    CREATE TABLE IF NOT EXISTS ${tableName} (
+      ${isMysql ? "id INT AUTO_INCREMENT PRIMARY KEY," : "id SERIAL PRIMARY KEY,"}
+${tableDefs},
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  \`);
+  console.log("${ModuleName}s table ready");
+};
+
+export const ${ModuleName} = {
+  async create(${createParams}): Promise<I${ModuleName}> {
+    const ${isMysql ? "[result]" : "result"} = await pool.${queryMethod}<any>(
+      \`INSERT INTO ${tableName} (${createArgs}) VALUES (${insertPlaceholders}) ${isMysql ? "" : "RETURNING *"}\`,
+      [${createArgs}]
+    );
+    return ${isMysql ? `{ id: result.insertId, ${createArgs}, created_at: new Date() }` : `result.rows[0]`};
   },
-  { timestamps: true }
-);
+  async findAll(): Promise<I${ModuleName}[]> {
+    const ${isMysql ? "[rows]" : "result"} = await pool.${queryMethod}<any${isMysql ? "[]" : ""}>(\`SELECT * FROM ${tableName}\`);
+    return ${isMysql ? "rows" : "result.rows"};
+  },
+  async findById(id: number): Promise<I${ModuleName} | null> {
+    const ${isMysql ? "[rows]" : "result"} = await pool.${queryMethod}<any${isMysql ? "[]" : ""}>(\`SELECT * FROM ${tableName} WHERE id = ${isMysql ? "?" : "$1"}\`, [id]);
+    const row = ${isMysql ? "rows[0]" : "result.rows[0]"};
+    return row ?? null;
+  },
+  async update(id: number, ${createParams}): Promise<boolean> {
+    const ${isMysql ? "[result]" : "result"} = await pool.${queryMethod}<any>(
+      \`UPDATE ${tableName} SET ${fields.map((f, i) => `${f.name} = ${isMysql ? "?" : `$${i + 1}`}`).join(", ")} WHERE id = ${isMysql ? "?" : `$${fields.length + 1}`}\`,
+      [${createArgs}, id]
+    );
+    return ${isMysql ? "result.affectedRows > 0" : "result.rowCount > 0"};
+  },
+  async delete(id: number): Promise<boolean> {
+    const ${isMysql ? "[result]" : "result"} = await pool.${queryMethod}<any>(\`DELETE FROM ${tableName} WHERE id = ${isMysql ? "?" : "$1"}\`, [id]);
+    return ${isMysql ? "result.affectedRows > 0" : "result.rowCount > 0"};
+  }
+};
 
-export default mongoose.model('${ModuleName}', ${ModuleName}Schema);
+init${ModuleName}sTable().catch(console.error);
 `;
 	}
 
-	// SQL (mysql2 / pg) — just export field definitions used by controller
-	const fieldDefs = fields
-		.map((f) => `  ${f.name}: ${sqlTypeMap(f.type)}`)
-		.join(",\n");
-	return `// ${ModuleName} table schema (for reference)
-// Run this SQL to create the table:
-/*
-CREATE TABLE IF NOT EXISTS ${ModuleName.toLowerCase()}s (
-  id SERIAL PRIMARY KEY,
-${fieldDefs},
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-*/
+	// JavaScript SQL
+	return `const ${isMysql ? "{ pool }" : "pool"} = require('${dbImport}');
 
-export const tableName = '${ModuleName.toLowerCase()}s';
+const init${ModuleName}sTable = async () => {
+  await pool.${queryMethod}(\`
+    CREATE TABLE IF NOT EXISTS ${tableName} (
+      ${isMysql ? "id INT AUTO_INCREMENT PRIMARY KEY," : "id SERIAL PRIMARY KEY,"}
+${tableDefs},
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  \`);
+  console.log("${ModuleName}s table ready");
+};
+
+const ${ModuleName} = {
+  async create(${createArgs}) {
+    const ${isMysql ? "[result]" : "result"} = await pool.${queryMethod}(
+      \`INSERT INTO ${tableName} (${createArgs}) VALUES (${insertPlaceholders}) ${isMysql ? "" : "RETURNING *"}\`,
+      [${createArgs}]
+    );
+    return ${isMysql ? `{ id: result.insertId, ${createArgs}, created_at: new Date() }` : `result.rows[0]`};
+  },
+  async findAll() {
+    const ${isMysql ? "[rows]" : "result"} = await pool.${queryMethod}(\`SELECT * FROM ${tableName}\`);
+    return ${isMysql ? "rows" : "result.rows"};
+  },
+  async findById(id) {
+    const ${isMysql ? "[rows]" : "result"} = await pool.${queryMethod}(\`SELECT * FROM ${tableName} WHERE id = ${isMysql ? "?" : "$1"}\`, [id]);
+    const row = ${isMysql ? "rows[0]" : "result.rows[0]"};
+    return row || null;
+  },
+  async update(id, ${createArgs}) {
+    const ${isMysql ? "[result]" : "result"} = await pool.${queryMethod}(
+      \`UPDATE ${tableName} SET ${fields.map((f, i) => `${f.name} = ${isMysql ? "?" : `$${i + 1}`}`).join(", ")} WHERE id = ${isMysql ? "?" : `$${fields.length + 1}`}\`,
+      [${createArgs}, id]
+    );
+    return ${isMysql ? "result.affectedRows > 0" : "result.rowCount > 0"};
+  },
+  async delete(id) {
+    const ${isMysql ? "[result]" : "result"} = await pool.${queryMethod}(\`DELETE FROM ${tableName} WHERE id = ${isMysql ? "?" : "$1"}\`, [id]);
+    return ${isMysql ? "result.affectedRows > 0" : "result.rowCount > 0"};
+  }
+};
+
+init${ModuleName}sTable().catch(console.error);
+
+module.exports = ${ModuleName};
 `;
 }
 
@@ -316,27 +409,20 @@ function generateSqlController(
 	fields: { name: string; type: string }[],
 	db: string,
 	exe: string,
-	dbImport = "../DB/db"
+	modelImport = "../models"
 ): string {
 	const table = `${moduleName}s`;
 	const cols = fields.map((f) => f.name).join(", ");
-	const vals = fields.map((_f, i) => `$${i + 1}`).join(", ");
-	const updates = fields.map((f, i) => `${f.name} = $${i + 1}`).join(", ");
-	const lastIdx = fields.length + 1;
+	const reqBodyArgs = fields.map(f => `req.body.${f.name}`);
 
-	if (db === "mysql2") {
+	if (exe === "ts") {
 		return `import { Request, Response } from 'express';
-import pool from '${dbImport}';
-
-const table = '${table}';
+import { ${ModuleName} } from '${modelImport}/${ModuleName}';
 
 export const create${ModuleName} = async (req: Request, res: Response): Promise<void> => {
   try {
     const { ${cols} } = req.body;
-    const [result] = await pool.execute(
-      \`INSERT INTO \${table} (${cols}) VALUES (${fields.map(() => "?").join(", ")})\`,
-      [${cols}]
-    );
+    const result = await ${ModuleName}.create(${cols});
     res.status(201).json({ message: '${ModuleName} created', data: result });
   } catch (error) {
     res.status(500).json({ error: 'Failed to create ${ModuleName}', details: (error as Error).message });
@@ -345,7 +431,7 @@ export const create${ModuleName} = async (req: Request, res: Response): Promise<
 
 export const get${ModuleName}s = async (_req: Request, res: Response): Promise<void> => {
   try {
-    const [rows] = await pool.execute(\`SELECT * FROM \${table}\`);
+    const rows = await ${ModuleName}.findAll();
     res.status(200).json(rows);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch ${moduleName}s', details: (error as Error).message });
@@ -354,9 +440,9 @@ export const get${ModuleName}s = async (_req: Request, res: Response): Promise<v
 
 export const get${ModuleName}ById = async (req: Request, res: Response): Promise<void> => {
   try {
-    const [rows] = await pool.execute(\`SELECT * FROM \${table} WHERE id = ?\`, [req.params.id]) as any;
-    if (!rows.length) { res.status(404).json({ error: '${ModuleName} not found' }); return; }
-    res.status(200).json(rows[0]);
+    const row = await ${ModuleName}.findById(Number(req.params.id));
+    if (!row) { res.status(404).json({ error: '${ModuleName} not found' }); return; }
+    res.status(200).json(row);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch ${ModuleName}', details: (error as Error).message });
   }
@@ -365,11 +451,8 @@ export const get${ModuleName}ById = async (req: Request, res: Response): Promise
 export const update${ModuleName} = async (req: Request, res: Response): Promise<void> => {
   try {
     const { ${cols} } = req.body;
-    const [result] = await pool.execute(
-      \`UPDATE \${table} SET ${fields.map((f) => `${f.name} = ?`).join(", ")} WHERE id = ?\`,
-      [${cols}, req.params.id]
-    ) as any;
-    if (result.affectedRows === 0) { res.status(404).json({ error: '${ModuleName} not found' }); return; }
+    const success = await ${ModuleName}.update(Number(req.params.id), ${cols});
+    if (!success) { res.status(404).json({ error: '${ModuleName} not found' }); return; }
     res.status(200).json({ message: '${ModuleName} updated' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update ${ModuleName}', details: (error as Error).message });
@@ -378,8 +461,8 @@ export const update${ModuleName} = async (req: Request, res: Response): Promise<
 
 export const delete${ModuleName} = async (req: Request, res: Response): Promise<void> => {
   try {
-    const [result] = await pool.execute(\`DELETE FROM \${table} WHERE id = ?\`, [req.params.id]) as any;
-    if (result.affectedRows === 0) { res.status(404).json({ error: '${ModuleName} not found' }); return; }
+    const success = await ${ModuleName}.delete(Number(req.params.id));
+    if (!success) { res.status(404).json({ error: '${ModuleName} not found' }); return; }
     res.status(200).json({ message: '${ModuleName} deleted successfully' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete ${ModuleName}', details: (error as Error).message });
@@ -388,65 +471,55 @@ export const delete${ModuleName} = async (req: Request, res: Response): Promise<
 `;
 	}
 
-	// pg
-	return `import { Request, Response } from 'express';
-import pool from '${dbImport}';
+	return `const ${ModuleName} = require('${modelImport}/${ModuleName}');
 
-const table = '${table}';
-
-export const create${ModuleName} = async (req: Request, res: Response): Promise<void> => {
+exports.create${ModuleName} = async (req, res) => {
   try {
     const { ${cols} } = req.body;
-    const result = await pool.query(
-      \`INSERT INTO \${table} (${cols}) VALUES (${vals}) RETURNING *\`,
-      [${cols}]
-    );
-    res.status(201).json(result.rows[0]);
+    const result = await ${ModuleName}.create(${cols});
+    res.status(201).json({ message: '${ModuleName} created', data: result });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to create ${ModuleName}', details: (error as Error).message });
+    res.status(500).json({ error: 'Failed to create ${ModuleName}', details: error.message });
   }
 };
 
-export const get${ModuleName}s = async (_req: Request, res: Response): Promise<void> => {
+exports.get${ModuleName}s = async (req, res) => {
   try {
-    const result = await pool.query(\`SELECT * FROM \${table}\`);
-    res.status(200).json(result.rows);
+    const rows = await ${ModuleName}.findAll();
+    res.status(200).json(rows);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch ${moduleName}s', details: (error as Error).message });
+    res.status(500).json({ error: 'Failed to fetch ${moduleName}s', details: error.message });
   }
 };
 
-export const get${ModuleName}ById = async (req: Request, res: Response): Promise<void> => {
+exports.get${ModuleName}ById = async (req, res) => {
   try {
-    const result = await pool.query(\`SELECT * FROM \${table} WHERE id = $1\`, [req.params.id]);
-    if (!result.rows.length) { res.status(404).json({ error: '${ModuleName} not found' }); return; }
-    res.status(200).json(result.rows[0]);
+    const row = await ${ModuleName}.findById(req.params.id);
+    if (!row) { return res.status(404).json({ error: '${ModuleName} not found' }); }
+    res.status(200).json(row);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch ${ModuleName}', details: (error as Error).message });
+    res.status(500).json({ error: 'Failed to fetch ${ModuleName}', details: error.message });
   }
 };
 
-export const update${ModuleName} = async (req: Request, res: Response): Promise<void> => {
+exports.update${ModuleName} = async (req, res) => {
   try {
     const { ${cols} } = req.body;
-    const result = await pool.query(
-      \`UPDATE \${table} SET ${updates} WHERE id = $${lastIdx} RETURNING *\`,
-      [${cols}, req.params.id]
-    );
-    if (!result.rows.length) { res.status(404).json({ error: '${ModuleName} not found' }); return; }
-    res.status(200).json(result.rows[0]);
+    const success = await ${ModuleName}.update(req.params.id, ${cols});
+    if (!success) { return res.status(404).json({ error: '${ModuleName} not found' }); }
+    res.status(200).json({ message: '${ModuleName} updated' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to update ${ModuleName}', details: (error as Error).message });
+    res.status(500).json({ error: 'Failed to update ${ModuleName}', details: error.message });
   }
 };
 
-export const delete${ModuleName} = async (req: Request, res: Response): Promise<void> => {
+exports.delete${ModuleName} = async (req, res) => {
   try {
-    const result = await pool.query(\`DELETE FROM \${table} WHERE id = $1 RETURNING *\`, [req.params.id]);
-    if (!result.rows.length) { res.status(404).json({ error: '${ModuleName} not found' }); return; }
+    const success = await ${ModuleName}.delete(req.params.id);
+    if (!success) { return res.status(404).json({ error: '${ModuleName} not found' }); }
     res.status(200).json({ message: '${ModuleName} deleted successfully' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to delete ${ModuleName}', details: (error as Error).message });
+    res.status(500).json({ error: 'Failed to delete ${ModuleName}', details: error.message });
   }
 };
 `;
@@ -511,7 +584,7 @@ function generateServer(
 		const dbRequire =
 			db === "mongoose"
 				? `const connectDB = require('${layout.dbImportInServer}');`
-				: `const { testConnection } = require('${layout.dbImportInServer}');`;
+				: `const { testConnection } = require('${layout.dbImportInServer}');\nrequire('${layout.modelImportInServer('User')}');\nrequire('${layout.modelImportInServer(ModuleName)}');`;
 		const dbInit =
 			db === "mongoose"
 				? `connectDB();`
@@ -551,7 +624,7 @@ module.exports = app;
 	const dbImport =
 		db === "mongoose"
 			? `import connectDB from '${layout.dbImportInServer}';`
-			: `import pool, { testConnection } from '${layout.dbImportInServer}';`;
+			: `import pool, { testConnection } from '${layout.dbImportInServer}';\nimport '${layout.modelImportInServer('User')}';\nimport '${layout.modelImportInServer(ModuleName)}';`;
 
 	const dbInit =
 		db === "mongoose"
@@ -641,18 +714,30 @@ function insertAfterLastMatch(content: string, linePattern: RegExp, newLine: str
 }
 
 // Add a new route import + mount point to an existing server file
-function updateServerFile(content: string, ModuleName: string, moduleName: string, exe: string, layout: StructureLayout): string {
+function updateServerFile(content: string, ModuleName: string, moduleName: string, exe: string, layout: StructureLayout, db?: string): string {
 	const routePath = layout.routeImportInServer(ModuleName);
 	const varName   = `${moduleName}Router`;
 	const newMount  = `app.use('/api/${moduleName}s', ${varName});`;
 
-	let updated: string;
+	let updated: string = content;
+
+	if (db === 'mysql' || db === 'postgres') {
+		const modelPath = layout.modelImportInServer(ModuleName);
+		if (exe === "ts") {
+			const modelImport = `import '${modelPath}';`;
+			updated = insertAfterLastMatch(updated, /^import .+ from '.+';$/, modelImport, /routes|models/);
+		} else {
+			const modelImport = `require('${modelPath}');`;
+			updated = insertAfterLastMatch(updated, /^const \w+ = require\(/, modelImport, /routes|models/);
+		}
+	}
+
 	if (exe === "ts") {
 		const newImport = `import ${varName} from '${routePath}';`;
-		updated = insertAfterLastMatch(content, /^import .+ from '.+';$/, newImport, /routes/);
+		updated = insertAfterLastMatch(updated, /^import .+ from '.+';$/, newImport, /routes/);
 	} else {
 		const newRequire = `const ${varName} = require('${routePath}');`;
-		updated = insertAfterLastMatch(content, /^const \w+ = require\(/, newRequire, /routes/);
+		updated = insertAfterLastMatch(updated, /^const \w+ = require\(/, newRequire, /routes/);
 	}
 	updated = insertAfterLastMatch(updated, /^app\.use\(['"]\/api\//, newMount);
 	return updated;
@@ -829,7 +914,7 @@ export function activate(context: vscode.ExtensionContext) {
 					// .env.example
 					fs.writeFileSync(
 						path.join(rootPath, ".env.example"),
-						`PORT=${port}\nDB_URI=your_connection_string_here\n`
+						`PORT=${port}\n${dblink}\n`
 					);
 
 					// .gitignore
@@ -849,7 +934,7 @@ export function activate(context: vscode.ExtensionContext) {
 					progress.report({ increment: 10, message: "Generating model..." });
 					fs.writeFileSync(
 						path.join(rootPath, layout.modelsDir, `${ModuleName}.${exe}`),
-						generateModel(ModuleName, fields, db, exe)
+						generateModel(ModuleName, fields, db, exe, layout.dbImportInController)
 					);
 
 					// Step 9: Controller
@@ -857,7 +942,7 @@ export function activate(context: vscode.ExtensionContext) {
 					const controllerContent =
 						db === "mongoose"
 							? generateMongooseController(ModuleName, moduleName, exe, layout.modelImportInController)
-							: generateSqlController(ModuleName, moduleName, fields, db, exe, layout.dbImportInController);
+							: generateSqlController(ModuleName, moduleName, fields, db, exe, layout.modelImportInController);
 					fs.writeFileSync(
 						path.join(rootPath, layout.controllersDir, `${ModuleName}.controller.${exe}`),
 						controllerContent
@@ -905,7 +990,13 @@ export function activate(context: vscode.ExtensionContext) {
 			});
 			if (!language) { return; }
 
+			const database = await vscode.window.showQuickPick(["MongoDB", "MySQL", "PostgreSQL"], {
+				placeHolder: "Select database for auth module",
+			});
+			if (!database) { return; }
+
 			const exe = language === "TypeScript" ? "ts" : "js";
+			const db  = database === "MongoDB" ? "mongoose" : database === "MySQL" ? "mysql2" : "pg";
 
 			await vscode.window.withProgress(
 				{
@@ -927,7 +1018,7 @@ export function activate(context: vscode.ExtensionContext) {
 					if (!fs.existsSync(pkgPath)) {
 						await runCommand("npm init -y", rootPath);
 					}
-					await runCommand("npm install bcryptjs jsonwebtoken dotenv mongoose express cors", rootPath);
+					await runCommand(`npm install bcryptjs jsonwebtoken dotenv ${db} express cors`, rootPath);
 					if (language === "TypeScript") {
 						await runCommand("npm install --save-dev @types/bcryptjs @types/jsonwebtoken @types/node @types/express @types/cors typescript ts-node", rootPath);
 					}
@@ -943,14 +1034,14 @@ export function activate(context: vscode.ExtensionContext) {
 					progress.report({ increment: 15, message: "Writing User model..." });
 					fs.writeFileSync(
 						path.join(rootPath, "models", `User.${exe}`),
-						generateUserModel(exe)
+						generateUserModel(exe, db, "../DB/db")
 					);
 
 					// Auth controller
 					progress.report({ increment: 15, message: "Writing auth controller..." });
 					fs.writeFileSync(
 						path.join(rootPath, "controllers", `auth.controller.${exe}`),
-						generateAuthController(exe)
+						generateAuthController(exe, db)
 					);
 
 					// Auth routes
@@ -1054,10 +1145,10 @@ export function activate(context: vscode.ExtensionContext) {
 				// ── Step 4: Source files ───────────────────────────────────────
 				sidebarProvider.postStatus("Writing source files...", "info");
 				fs.writeFileSync(path.join(rootPath, layout.dbDir, `db.${exe}`), generateDbFile(db, exe));
-				fs.writeFileSync(path.join(rootPath, layout.modelsDir, `${ModuleName}.${exe}`), generateModel(ModuleName, fields, db, exe));
+				fs.writeFileSync(path.join(rootPath, layout.modelsDir, `${ModuleName}.${exe}`), generateModel(ModuleName, fields, db, exe, layout.dbImportInController));
 				const ctrl = db === "mongoose"
 					? generateMongooseController(ModuleName, moduleName, exe, layout.modelImportInController)
-					: generateSqlController(ModuleName, moduleName, fields, db, exe, layout.dbImportInController);
+					: generateSqlController(ModuleName, moduleName, fields, db, exe, layout.modelImportInController);
 				fs.writeFileSync(path.join(rootPath, layout.controllersDir, `${ModuleName}.controller.${exe}`), ctrl);
 				fs.writeFileSync(path.join(rootPath, layout.routesDir, `${ModuleName}.routes.${exe}`), generateRoutes(ModuleName, exe, layout.controllerImportInRoute));
 				fs.writeFileSync(path.join(rootPath, `server.${exe}`), generateServer(ModuleName, moduleName, port, db, exe, layout));
@@ -1108,7 +1199,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 			const { language } = msg;
 			const exe = language === "TypeScript" ? "ts" : "js";
-			const { layout } = detectProjectConfig(rootPath);
+			const { db, layout } = detectProjectConfig(rootPath);
 
 			try {
 				// ── Folders ────────────────────────────────────────────────────
@@ -1128,8 +1219,8 @@ export function activate(context: vscode.ExtensionContext) {
 				// ── Write auth files immediately ───────────────────────────────
 				sidebarProvider.postStatus("Writing auth files...", "info");
 				fs.writeFileSync(path.join(rootPath, layout.middlewareDir,  `auth.middleware.${exe}`), generateAuthMiddleware(exe));
-				fs.writeFileSync(path.join(rootPath, layout.modelsDir,      `User.${exe}`),            generateUserModel(exe));
-				fs.writeFileSync(path.join(rootPath, layout.controllersDir, `auth.controller.${exe}`), generateAuthController(exe, layout.userModelImportInAuthController));
+				fs.writeFileSync(path.join(rootPath, layout.modelsDir,      `User.${exe}`),            generateUserModel(exe, db, layout.dbImportInController));
+				fs.writeFileSync(path.join(rootPath, layout.controllersDir, `auth.controller.${exe}`), generateAuthController(exe, db, layout.userModelImportInAuthController));
 				fs.writeFileSync(path.join(rootPath, layout.routesDir,      `auth.routes.${exe}`),     generateAuthRoutes(exe, layout.authControllerImportInAuthRoute, layout.authMiddlewareImportInAuthRoute));
 
 				const envPath = path.join(rootPath, ".env");
@@ -1140,7 +1231,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 				// ── npm install in visible terminal ────────────────────────────
 				sidebarProvider.postStatus("Files written! Installing dependencies in terminal...", "info");
-				const runtimeDeps = "bcryptjs jsonwebtoken dotenv mongoose express cors";
+				const runtimeDeps = `bcryptjs jsonwebtoken dotenv ${db} express cors`;
 				const devDeps = language === "TypeScript"
 					? "@types/bcryptjs @types/jsonwebtoken @types/node @types/express @types/cors typescript ts-node"
 					: "";
@@ -1232,7 +1323,7 @@ export function activate(context: vscode.ExtensionContext) {
 					fs.writeFileSync(path.join(rootPath, "tsconfig.json"), generateTsConfig());
 				}
 				fs.writeFileSync(path.join(rootPath, ".env"), generateEnv(port, db, dblink));
-				fs.writeFileSync(path.join(rootPath, ".env.example"), `PORT=${port}\nDB_URI=your_connection_string_here\nJWT_SECRET=your_super_secret_key_here\nJWT_EXPIRES_IN=7d\n`);
+				fs.writeFileSync(path.join(rootPath, ".env.example"), `PORT=${port}\nDB_URI=${dblink}\nJWT_SECRET=your_super_secret_key_here\nJWT_EXPIRES_IN=7d\n`);
 				if (!fs.existsSync(path.join(rootPath, ".gitignore"))) {
 					fs.writeFileSync(path.join(rootPath, ".gitignore"), "node_modules/\n.env\ndist/\n");
 				}
@@ -1246,18 +1337,18 @@ export function activate(context: vscode.ExtensionContext) {
 				// ── Module files ──────────────────────────────────────────────
 				sidebarProvider.postStatus("Writing module files...", "info");
 				fs.writeFileSync(path.join(rootPath, layout.dbDir, `db.${exe}`), generateDbFile(db, exe));
-				fs.writeFileSync(path.join(rootPath, layout.modelsDir, `${ModuleName}.${exe}`), generateModel(ModuleName, fields, db, exe));
+				fs.writeFileSync(path.join(rootPath, layout.modelsDir, `${ModuleName}.${exe}`), generateModel(ModuleName, fields, db, exe, layout.dbImportInController));
 				const ctrl = db === "mongoose"
 					? generateMongooseController(ModuleName, moduleName, exe, layout.modelImportInController)
-					: generateSqlController(ModuleName, moduleName, fields, db, exe, layout.dbImportInController);
+					: generateSqlController(ModuleName, moduleName, fields, db, exe, layout.modelImportInController);
 				fs.writeFileSync(path.join(rootPath, layout.controllersDir, `${ModuleName}.controller.${exe}`), ctrl);
 				fs.writeFileSync(path.join(rootPath, layout.routesDir, `${ModuleName}.routes.${exe}`), generateRoutes(ModuleName, exe, layout.controllerImportInRoute));
 
 				// ── Auth files ────────────────────────────────────────────────
 				sidebarProvider.postStatus("Writing auth files...", "info");
 				fs.writeFileSync(path.join(rootPath, layout.middlewareDir, `auth.middleware.${exe}`), generateAuthMiddleware(exe));
-				fs.writeFileSync(path.join(rootPath, layout.modelsDir, `User.${exe}`), generateUserModel(exe));
-				fs.writeFileSync(path.join(rootPath, layout.controllersDir, `auth.controller.${exe}`), generateAuthController(exe, layout.userModelImportInAuthController));
+				fs.writeFileSync(path.join(rootPath, layout.modelsDir, `User.${exe}`), generateUserModel(exe, db, layout.dbImportInController));
+				fs.writeFileSync(path.join(rootPath, layout.controllersDir, `auth.controller.${exe}`), generateAuthController(exe, db, layout.userModelImportInAuthController));
 				fs.writeFileSync(path.join(rootPath, layout.routesDir, `auth.routes.${exe}`), generateAuthRoutes(exe, layout.authControllerImportInAuthRoute, layout.authMiddlewareImportInAuthRoute));
 
 				// ── Server ────────────────────────────────────────────────────
@@ -1330,13 +1421,13 @@ export function activate(context: vscode.ExtensionContext) {
 				// Model
 				fs.writeFileSync(
 					path.join(rootPath, layout.modelsDir, `${ModuleName}.${exe}`),
-					generateModel(ModuleName, fields, db, exe)
+					generateModel(ModuleName, fields, db, exe, layout.dbImportInController)
 				);
 
 				// Controller
 				const ctrl = db === "mongoose"
 					? generateMongooseController(ModuleName, moduleName, exe, layout.modelImportInController)
-					: generateSqlController(ModuleName, moduleName, fields, db, exe, layout.dbImportInController);
+					: generateSqlController(ModuleName, moduleName, fields, db, exe, layout.modelImportInController);
 				fs.writeFileSync(path.join(rootPath, layout.controllersDir, `${ModuleName}.controller.${exe}`), ctrl);
 
 				// Routes
@@ -1349,9 +1440,9 @@ export function activate(context: vscode.ExtensionContext) {
 				const serverPath = path.join(rootPath, `server.${exe}`);
 				if (fs.existsSync(serverPath)) {
 					const serverContent = fs.readFileSync(serverPath, "utf8");
-					const updated = updateServerFile(serverContent, ModuleName, moduleName, exe, layout);
+					const updated = updateServerFile(serverContent, ModuleName, moduleName, exe, layout, db);
 					fs.writeFileSync(serverPath, updated);
-					sidebarProvider.postStatus(`server.${exe} updated with new route.`, "info");
+					sidebarProvider.postStatus(`server.${exe} updated with new route and model initialization.`, "info");
 				} else {
 					sidebarProvider.postStatus(`Warning: server.${exe} not found — skipped server update.`, "info");
 				}
@@ -1421,9 +1512,10 @@ module.exports = (req, res, next) => {
 `;
 }
 
-function generateUserModel(exe: string): string {
-	return exe === "ts"
-		? `import mongoose from 'mongoose';
+function generateUserModel(exe: string, db = "mongoose", dbImport = "../DB/db"): string {
+	if (db === "mongoose") {
+		return exe === "ts"
+			? `import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
 export interface IUser extends mongoose.Document {
@@ -1453,7 +1545,7 @@ UserSchema.methods.comparePassword = function (candidate: string): Promise<boole
 
 export default mongoose.model<IUser>('User', UserSchema);
 `
-		: `const mongoose = require('mongoose');
+			: `const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const UserSchema = new mongoose.Schema(
@@ -1476,11 +1568,194 @@ UserSchema.methods.comparePassword = function (candidate) {
 
 module.exports = mongoose.model('User', UserSchema);
 `;
+	}
+
+	if (db === "mysql2") {
+		return exe === "ts"
+			? `import pool from '${dbImport}';
+import bcrypt from 'bcryptjs';
+
+export interface IUser {
+  id: number;
+  name: string;
+  email: string;
+  password: string;
 }
 
-function generateAuthController(exe: string, userModelImport = "../models/User"): string {
+export const initUsersTable = async (): Promise<void> => {
+  await pool.execute(\`
+    CREATE TABLE IF NOT EXISTS users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL UNIQUE,
+      password VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  \`);
+};
+
+export const User = {
+  async findByEmail(email: string): Promise<IUser | null> {
+    const [rows] = await pool.execute<any[]>('SELECT * FROM users WHERE email = ?', [email]);
+    return rows[0] ?? null;
+  },
+  async create(name: string, email: string, password: string): Promise<IUser> {
+    const hashed = await bcrypt.hash(password, 10);
+    const [result] = await pool.execute<any>(
+      'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
+      [name, email, hashed]
+    );
+    return { id: result.insertId, name, email, password: hashed };
+  },
+  async findById(id: number): Promise<Omit<IUser, 'password'> | null> {
+    const [rows] = await pool.execute<any[]>('SELECT id, name, email, created_at FROM users WHERE id = ?', [id]);
+    return rows[0] ?? null;
+  },
+  async comparePassword(candidate: string, hashed: string): Promise<boolean> {
+    return bcrypt.compare(candidate, hashed);
+  },
+};
+
+initUsersTable().catch(console.error);
+`
+			: `const bcrypt = require('bcryptjs');
+const pool = require('${dbImport}');
+
+const initUsersTable = async () => {
+  await pool.execute(\`
+    CREATE TABLE IF NOT EXISTS users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL UNIQUE,
+      password VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  \`);
+};
+
+const User = {
+  async findByEmail(email) {
+    const [rows] = await pool.execute('SELECT * FROM users WHERE email = ?', [email]);
+    return rows[0] ?? null;
+  },
+  async create(name, email, password) {
+    const hashed = await bcrypt.hash(password, 10);
+    const [result] = await pool.execute(
+      'INSERT INTO users (name, email, password) VALUES (?, ?, ?)',
+      [name, email, hashed]
+    );
+    return { id: result.insertId, name, email };
+  },
+  async findById(id) {
+    const [rows] = await pool.execute('SELECT id, name, email, created_at FROM users WHERE id = ?', [id]);
+    return rows[0] ?? null;
+  },
+  async comparePassword(candidate, hashed) {
+    return bcrypt.compare(candidate, hashed);
+  },
+};
+
+initUsersTable().catch(console.error);
+module.exports = { User, initUsersTable };
+`;
+	}
+
+	// PostgreSQL
 	return exe === "ts"
-		? `import { Request, Response } from 'express';
+		? `import pool from '${dbImport}';
+import bcrypt from 'bcryptjs';
+
+export interface IUser {
+  id: number;
+  name: string;
+  email: string;
+  password: string;
+}
+
+export const initUsersTable = async (): Promise<void> => {
+  await pool.query(\`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL UNIQUE,
+      password VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  \`);
+};
+
+export const User = {
+  async findByEmail(email: string): Promise<IUser | null> {
+    const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    return rows[0] ?? null;
+  },
+  async create(name: string, email: string, password: string): Promise<IUser> {
+    const hashed = await bcrypt.hash(password, 10);
+    const { rows } = await pool.query(
+      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email',
+      [name, email, hashed]
+    );
+    return rows[0];
+  },
+  async findById(id: number): Promise<Omit<IUser, 'password'> | null> {
+    const { rows } = await pool.query('SELECT id, name, email, created_at FROM users WHERE id = $1', [id]);
+    return rows[0] ?? null;
+  },
+  async comparePassword(candidate: string, hashed: string): Promise<boolean> {
+    return bcrypt.compare(candidate, hashed);
+  },
+};
+
+initUsersTable().catch(console.error);
+`
+		: `const bcrypt = require('bcryptjs');
+const pool = require('${dbImport}');
+
+const initUsersTable = async () => {
+  await pool.query(\`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      email VARCHAR(255) NOT NULL UNIQUE,
+      password VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  \`);
+};
+
+const User = {
+  async findByEmail(email) {
+    const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    return rows[0] ?? null;
+  },
+  async create(name, email, password) {
+    const hashed = await bcrypt.hash(password, 10);
+    const { rows } = await pool.query(
+      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email',
+      [name, email, hashed]
+    );
+    return rows[0];
+  },
+  async findById(id) {
+    const { rows } = await pool.query('SELECT id, name, email, created_at FROM users WHERE id = $1', [id]);
+    return rows[0] ?? null;
+  },
+  async comparePassword(candidate, hashed) {
+    return bcrypt.compare(candidate, hashed);
+  },
+};
+
+initUsersTable().catch(console.error);
+module.exports = { User, initUsersTable };
+`;
+}
+
+function generateAuthController(exe: string, db = "mongoose", userModelImport = "../models/User"): string {
+	const isSql = db !== "mongoose";
+	if (!isSql) {
+		// Mongoose version
+		return exe === "ts"
+			? `import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 import User from '${userModelImport}';
@@ -1529,12 +1804,12 @@ export const getMe = async (req: any, res: Response): Promise<void> => {
   }
 };
 `
-		: `const jwt = require('jsonwebtoken');
+			: `const jwt = require('jsonwebtoken');
 const User = require('${userModelImport}');
 require('dotenv').config();
 
 const signToken = (id) =>
-  jwt.sign({ id }, process.env.JWT_SECRET, {
+  jwt.sign({ id: String(id) }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   });
 
@@ -1568,6 +1843,105 @@ exports.login = async (req, res) => {
 exports.getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('-password');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.status(200).json(user);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to get user', error: err.message });
+  }
+};
+`;
+	}
+
+	// SQL version (mysql2 or pg)
+	return exe === "ts"
+		? `import { Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
+import dotenv from 'dotenv';
+import { User } from '${userModelImport}';
+dotenv.config();
+
+const signToken = (id: unknown): string =>
+  jwt.sign({ id: String(id) }, process.env.JWT_SECRET as string, {
+    expiresIn: (process.env.JWT_EXPIRES_IN ?? '7d') as '7d',
+  });
+
+export const register = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { name, email, password } = req.body;
+    const existing = await User.findByEmail(email);
+    if (existing) { res.status(409).json({ message: 'Email already in use' }); return; }
+    const user = await User.create(name, email, password);
+    const token = signToken(user.id);
+    res.status(201).json({ token, user: { id: user.id, name: user.name, email: user.email } });
+  } catch (err) {
+    res.status(500).json({ message: 'Registration failed', error: (err as Error).message });
+  }
+};
+
+export const login = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, password } = req.body;
+    const user = await User.findByEmail(email);
+    if (!user || !(await User.comparePassword(password, user.password))) {
+      res.status(401).json({ message: 'Invalid email or password' });
+      return;
+    }
+    const token = signToken(user.id);
+    res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email } });
+  } catch (err) {
+    res.status(500).json({ message: 'Login failed', error: (err as Error).message });
+  }
+};
+
+export const getMe = async (req: any, res: Response): Promise<void> => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) { res.status(404).json({ message: 'User not found' }); return; }
+    res.status(200).json(user);
+  } catch (err) {
+    res.status(500).json({ message: 'Failed to get user', error: (err as Error).message });
+  }
+};
+`
+		: `const jwt = require('jsonwebtoken');
+const { User } = require('${userModelImport}');
+require('dotenv').config();
+
+const signToken = (id) =>
+  jwt.sign({ id: String(id) }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  });
+
+exports.register = async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    const existing = await User.findByEmail(email);
+    if (existing) return res.status(409).json({ message: 'Email already in use' });
+    const user = await User.create(name, email, password);
+    const token = signToken(user.id);
+    res.status(201).json({ token, user: { id: user.id, name: user.name, email: user.email } });
+  } catch (err) {
+    res.status(500).json({ message: 'Registration failed', error: err.message });
+  }
+};
+
+exports.login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await User.findByEmail(email);
+    if (!user || !(await User.comparePassword(password, user.password))) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+    const token = signToken(user.id);
+    res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email } });
+  } catch (err) {
+    res.status(500).json({ message: 'Login failed', error: err.message });
+  }
+};
+
+exports.getMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.status(200).json(user);
   } catch (err) {
