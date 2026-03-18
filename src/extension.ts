@@ -284,11 +284,11 @@ export const ${ModuleName} = {
       \`UPDATE ${tableName} SET ${fields.map((f, i) => `${f.name} = ${isMysql ? "?" : `$${i + 1}`}`).join(", ")} WHERE id = ${isMysql ? "?" : `$${fields.length + 1}`}\`,
       [${createArgs}, id]
     );
-    return ${isMysql ? "result.affectedRows > 0" : "result.rowCount > 0"};
+    return ${isMysql ? "result.affectedRows > 0" : "(result.rowCount ?? 0) > 0"};
   },
   async delete(id: number): Promise<boolean> {
     const ${isMysql ? "[result]" : "result"} = await pool.${queryMethod}<any>(\`DELETE FROM ${tableName} WHERE id = ${isMysql ? "?" : "$1"}\`, [id]);
-    return ${isMysql ? "result.affectedRows > 0" : "result.rowCount > 0"};
+    return ${isMysql ? "result.affectedRows > 0" : "(result.rowCount ?? 0) > 0"};
   }
 };
 
@@ -332,11 +332,11 @@ const ${ModuleName} = {
       \`UPDATE ${tableName} SET ${fields.map((f, i) => `${f.name} = ${isMysql ? "?" : `$${i + 1}`}`).join(", ")} WHERE id = ${isMysql ? "?" : `$${fields.length + 1}`}\`,
       [${createArgs}, id]
     );
-    return ${isMysql ? "result.affectedRows > 0" : "result.rowCount > 0"};
+    return ${isMysql ? "result.affectedRows > 0" : "(result.rowCount ?? 0) > 0"};
   },
   async delete(id) {
     const ${isMysql ? "[result]" : "result"} = await pool.${queryMethod}(\`DELETE FROM ${tableName} WHERE id = ${isMysql ? "?" : "$1"}\`, [id]);
-    return ${isMysql ? "result.affectedRows > 0" : "result.rowCount > 0"};
+    return ${isMysql ? "result.affectedRows > 0" : "(result.rowCount ?? 0) > 0"};
   }
 };
 
@@ -578,23 +578,27 @@ function generateServer(
 	port: string,
 	db: string,
 	exe: string,
-	layout: StructureLayout = getStructureLayout("simple")
+	layout: StructureLayout = getStructureLayout("simple"),
+	includeAuth: boolean = false
 ): string {
 	if (exe === "js") {
 		const dbRequire =
 			db === "mongoose"
 				? `const connectDB = require('${layout.dbImportInServer}');`
-				: `const { testConnection } = require('${layout.dbImportInServer}');\nrequire('${layout.modelImportInServer('User')}');\nrequire('${layout.modelImportInServer(ModuleName)}');`;
+				: `const { testConnection } = require('${layout.dbImportInServer}');\n${includeAuth ? `require('${layout.modelImportInServer('User')}');\n` : ''}require('${layout.modelImportInServer(ModuleName)}');`;
 		const dbInit =
 			db === "mongoose"
 				? `connectDB();`
 				: `testConnection().catch(console.error);`;
+		
+		const authRequire = includeAuth ? `\nconst authRouter = require('${layout.authRouteImportInServer}');` : '';
+		const authRoute = includeAuth ? `\napp.use('/api/auth', authRouter);` : '';
+
 		return `const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 ${dbRequire}
-const ${moduleName}Router = require('${layout.routeImportInServer(ModuleName)}');
-const authRouter = require('${layout.authRouteImportInServer}');
+const ${moduleName}Router = require('${layout.routeImportInServer(ModuleName)}');${authRequire}
 
 const app = express();
 const PORT = process.env.PORT || ${port};
@@ -607,8 +611,7 @@ app.use(express.urlencoded({ extended: true }));
 ${dbInit}
 
 // Routes
-app.use('/api/${moduleName}s', ${moduleName}Router);
-app.use('/api/auth', authRouter);
+app.use('/api/${moduleName}s', ${moduleName}Router);${authRoute}
 
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'OK' }));
@@ -624,19 +627,21 @@ module.exports = app;
 	const dbImport =
 		db === "mongoose"
 			? `import connectDB from '${layout.dbImportInServer}';`
-			: `import pool, { testConnection } from '${layout.dbImportInServer}';\nimport '${layout.modelImportInServer('User')}';\nimport '${layout.modelImportInServer(ModuleName)}';`;
+			: `import pool, { testConnection } from '${layout.dbImportInServer}';\n${includeAuth ? `import '${layout.modelImportInServer('User')}';\n` : ''}import '${layout.modelImportInServer(ModuleName)}';`;
 
 	const dbInit =
 		db === "mongoose"
 			? `connectDB();`
 			: `testConnection().catch(console.error);`;
 
+	const authImport = includeAuth ? `\nimport authRouter from '${layout.authRouteImportInServer}';` : '';
+	const authRoute = includeAuth ? `\napp.use('/api/auth', authRouter);` : '';
+
 	return `import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 ${dbImport}
-import ${moduleName}Router from '${layout.routeImportInServer(ModuleName)}';
-import authRouter from '${layout.authRouteImportInServer}';
+import ${moduleName}Router from '${layout.routeImportInServer(ModuleName)}';${authImport}
 
 dotenv.config();
 
@@ -651,8 +656,7 @@ app.use(express.urlencoded({ extended: true }));
 ${dbInit}
 
 // Routes
-app.use('/api/${moduleName}s', ${moduleName}Router);
-app.use('/api/auth', authRouter);
+app.use('/api/${moduleName}s', ${moduleName}Router);${authRoute}
 
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'OK' }));
@@ -740,6 +744,46 @@ function updateServerFile(content: string, ModuleName: string, moduleName: strin
 		updated = insertAfterLastMatch(updated, /^const \w+ = require\(/, newRequire, /routes/);
 	}
 	updated = insertAfterLastMatch(updated, /^app\.use\(['"]\/api\//, newMount);
+	return updated;
+}
+
+function updateServerFileForAuth(content: string, exe: string, layout: StructureLayout, db?: string): string {
+	const routePath = layout.authRouteImportInServer;
+	const varName   = `authRouter`;
+	const newMount  = `app.use('/api/auth', ${varName});`;
+
+	let updated: string = content;
+
+	if (db === 'mysql2' || db === 'pg') {
+		const modelPath = layout.modelImportInServer('User');
+		if (exe === "ts") {
+			const modelImport = `import '${modelPath}';`;
+			if (!updated.includes(modelImport)) {
+				updated = insertAfterLastMatch(updated, /^import .+ from '.+';$/, modelImport, /routes|models/);
+			}
+		} else {
+			const modelImport = `require('${modelPath}');`;
+			if (!updated.includes(modelImport)) {
+				updated = insertAfterLastMatch(updated, /^const \w+ = require\(/, modelImport, /routes|models/);
+			}
+		}
+	}
+
+	if (exe === "ts") {
+		const newImport = `import ${varName} from '${routePath}';`;
+		if (!updated.includes(newImport)) {
+			updated = insertAfterLastMatch(updated, /^import .+ from '.+';$/, newImport, /routes/);
+		}
+	} else {
+		const newRequire = `const ${varName} = require('${routePath}');`;
+		if (!updated.includes(newRequire)) {
+			updated = insertAfterLastMatch(updated, /^const \w+ = require\(/, newRequire, /routes/);
+		}
+	}
+	
+	if (!updated.includes("/api/auth")) {
+		updated = insertAfterLastMatch(updated, /^app\.use\(['"]\/api\//, newMount);
+	}
 	return updated;
 }
 
@@ -888,6 +932,9 @@ export function activate(context: vscode.ExtensionContext) {
 							"@types/bcryptjs",
 							"@types/jsonwebtoken",
 						]);
+						if (db === "pg") {
+							devDeps.push("@types/pg");
+						}
 					}
 					await runCommand(`npm install --save-dev ${devDeps.join(" ")}`, rootPath);
 
@@ -1020,7 +1067,8 @@ export function activate(context: vscode.ExtensionContext) {
 					}
 					await runCommand(`npm install bcryptjs jsonwebtoken dotenv ${db} express cors`, rootPath);
 					if (language === "TypeScript") {
-						await runCommand("npm install --save-dev @types/bcryptjs @types/jsonwebtoken @types/node @types/express @types/cors typescript ts-node", rootPath);
+						const extraDeps = db === "pg" ? " @types/pg" : "";
+						await runCommand(`npm install --save-dev @types/bcryptjs @types/jsonwebtoken @types/node @types/express @types/cors typescript ts-node${extraDeps}`, rootPath);
 					}
 
 					// JWT middleware
@@ -1058,12 +1106,21 @@ export function activate(context: vscode.ExtensionContext) {
 						fs.appendFileSync(envPath, "\nJWT_SECRET=your_super_secret_key_here\nJWT_EXPIRES_IN=7d\n");
 					}
 
+					// Update server file
+					const serverPath = path.join(rootPath, `server.${exe}`);
+					if (fs.existsSync(serverPath)) {
+						const serverContent = fs.readFileSync(serverPath, "utf8");
+						const { layout } = detectProjectConfig(rootPath);
+						const updated = updateServerFileForAuth(serverContent, exe, layout, db);
+						fs.writeFileSync(serverPath, updated);
+					}
+
 					progress.report({ increment: 5, message: "Done!" });
 				}
 			);
 
 			vscode.window.showInformationMessage(
-				"🔐 Auth module generated! Mount routes: app.use('/api/auth', authRouter)"
+				"🔐 Auth module generated and routes mounted automatically!"
 			);
 		}
 	);
@@ -1160,6 +1217,9 @@ export function activate(context: vscode.ExtensionContext) {
 				let devDeps = ["nodemon"];
 				if (language === "TypeScript") {
 					devDeps = devDeps.concat(["typescript", "ts-node", "@types/node", "@types/express", "@types/cors", "@types/bcryptjs", "@types/jsonwebtoken"]);
+					if (db === "pg") {
+						devDeps.push("@types/pg");
+					}
 				}
 
 				const terminal = vscode.window.createTerminal({
@@ -1229,12 +1289,24 @@ export function activate(context: vscode.ExtensionContext) {
 					fs.appendFileSync(envPath, "\nJWT_SECRET=your_super_secret_key_here\nJWT_EXPIRES_IN=7d\n");
 				}
 
+				// Update server file automatically
+				const serverPath = path.join(rootPath, `server.${exe}`);
+				if (fs.existsSync(serverPath)) {
+					const serverContent = fs.readFileSync(serverPath, "utf8");
+					const updated = updateServerFileForAuth(serverContent, exe, layout, db);
+					fs.writeFileSync(serverPath, updated);
+					sidebarProvider.postStatus(`server.${exe} updated with auth routes.`, "info");
+				}
+
 				// ── npm install in visible terminal ────────────────────────────
 				sidebarProvider.postStatus("Files written! Installing dependencies in terminal...", "info");
 				const runtimeDeps = `bcryptjs jsonwebtoken dotenv ${db} express cors`;
-				const devDeps = language === "TypeScript"
+				let devDeps = language === "TypeScript"
 					? "@types/bcryptjs @types/jsonwebtoken @types/node @types/express @types/cors typescript ts-node"
 					: "";
+				if (language === "TypeScript" && db === "pg") {
+					devDeps += " @types/pg";
+				}
 
 				const terminal = vscode.window.createTerminal({
 					name: "Backend Gen — Auth",
@@ -1246,8 +1318,8 @@ export function activate(context: vscode.ExtensionContext) {
 					: `npm install ${runtimeDeps} && echo "✅ Auth dependencies installed!"`;
 				terminal.sendText(installCmd);
 
-				sidebarProvider.postStatus("✓ Auth files generated! See terminal for npm install. Mount: app.use('/api/auth', authRouter)", "success");
-				vscode.window.showInformationMessage("Auth generated! Check terminal.");
+				sidebarProvider.postStatus("✓ Auth files generated and routes mounted! See terminal for npm install.", "success");
+				vscode.window.showInformationMessage("Auth generated and mounted! Check terminal.");
 				console.log("[BackendGen] Auth done — terminal opened");
 			} catch (err) {
 				console.error("[BackendGen] Auth error:", err);
@@ -1353,7 +1425,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 				// ── Server ────────────────────────────────────────────────────
 				sidebarProvider.postStatus("Writing server file...", "info");
-				fs.writeFileSync(path.join(rootPath, `server.${exe}`), generateServer(ModuleName, moduleName, port, db, exe, layout));
+				fs.writeFileSync(path.join(rootPath, `server.${exe}`), generateServer(ModuleName, moduleName, port, db, exe, layout, true));
 
 				sidebarProvider.postStatus("Files written! Installing dependencies...", "info");
 
@@ -1362,6 +1434,9 @@ export function activate(context: vscode.ExtensionContext) {
 				let devDeps = ["nodemon"];
 				if (language === "TypeScript") {
 					devDeps = devDeps.concat(["typescript", "ts-node", "@types/node", "@types/express", "@types/cors", "@types/bcryptjs", "@types/jsonwebtoken"]);
+					if (db === "pg") {
+						devDeps.push("@types/pg");
+					}
 				}
 				const terminal = vscode.window.createTerminal({
 					name: "Backend Gen — Full Backend",
