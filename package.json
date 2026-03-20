@@ -1,35 +1,58 @@
 {
-  "name": "my-first-extension",
-  "displayName": "my-first-extension",
-  "description": "anything",
+  "name": "node-forge",
+  "displayName": "NodeForge",
+  "description": "Generate full Node.js/Express backends with one click — MongoDB, MySQL, PostgreSQL, TypeScript/JavaScript, JWT Auth",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.109.0"
   },
   "categories": [
-    "Other"
+    "Other",
+    "Snippets"
   ],
+  "keywords": [
+    "express",
+    "nodejs",
+    "mongodb",
+    "backend",
+    "scaffold",
+    "generator",
+    "crud",
+    "rest api",
+    "mongoose",
+    "typescript",
+    "javascript",
+    "jwt",
+    "authentication",
+    "MySQL",
+    "PostgreSQL"
+  ],
+  "icon": "Logo.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/WeerasingheMSC/First_Exetention.git"
+  },
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "my-first-extension.generateMernModule",
+        "command": "nodeforge.generateMernModule",
         "title": "Generate Backend Module"
       },
       {
-        "command": "my-first-extension.generateAuth",
+        "command": "nodeforge.generateAuth",
         "title": "Generate Auth Module"
       },
       {
-        "command": "my-first-extension.openSidebar",
-        "title": "Open Backend Generator"
+        "command": "nodeforge.openSidebar",
+        "title": "Open NodeForge"
       },
       {
-        "command": "my-first-extension.generateFullBackendFromSidebar",
+        "command": "nodeforge.generateFullBackendFromSidebar",
         "title": "Generate Full Backend"
       },
       {
-        "command": "my-first-extension.addModuleToBackend",
+        "command": "nodeforge.addModuleToBackend",
         "title": "Add Module to Backend"
       }
     ],
@@ -37,8 +60,8 @@
       "activitybar": [
         {
           "id": "backendGenerator",
-          "title": "Backend Generator",
-          "icon": "$(server-environment)"
+          "title": "NodeForge",
+          "icon": "images/nodeforge-icon.svg"
         }
       ]
     },
@@ -47,8 +70,8 @@
         {
           "type": "webview",
           "id": "backendGeneratorSidebar",
-          "name": "Backend Generator",
-          "icon": "$(server-environment)"
+          "name": "NodeForge",
+          "icon": "images/nodeforge-icon.svg"
         }
       ]
     }
@@ -68,15 +91,15 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.109.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "typescript-eslint": "^8.54.0",
-    "eslint": "^9.39.2",
+    "@types/vscode": "^1.109.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
     "esbuild": "^0.27.2",
+    "eslint": "^9.39.2",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.9.3",
-    "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2"
+    "typescript-eslint": "^8.54.0"
   }
 }

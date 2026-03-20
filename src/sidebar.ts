@@ -31,25 +31,25 @@ export class BackendGeneratorSidebarProvider implements vscode.WebviewViewProvid
         if (msg.command === "generateModule") {
           vscode.window.showInformationMessage("Sidebar: Generate Module button clicked. Starting generation...");
           await vscode.commands.executeCommand(
-            "my-first-extension.generateMernModuleFromSidebar",
+            "nodeforge.generateMernModuleFromSidebar",
             msg
           );
         } else if (msg.command === "generateAuth") {
           vscode.window.showInformationMessage("Sidebar: Generate Auth button clicked.");
           await vscode.commands.executeCommand(
-            "my-first-extension.generateAuthFromSidebar",
+            "nodeforge.generateAuthFromSidebar",
             msg
           );
         } else if (msg.command === "generateFullBackend") {
           vscode.window.showInformationMessage("Sidebar: Generate Full Backend clicked.");
           await vscode.commands.executeCommand(
-            "my-first-extension.generateFullBackendFromSidebar",
+            "nodeforge.generateFullBackendFromSidebar",
             msg
           );
         } else if (msg.command === "addModule") {
           vscode.window.showInformationMessage(`Sidebar: Adding module ${msg.moduleName}...`);
           await vscode.commands.executeCommand(
-            "my-first-extension.addModuleToBackend",
+            "nodeforge.addModuleToBackend",
             msg
           );
         }
@@ -244,7 +244,7 @@ export class BackendGeneratorSidebarProvider implements vscode.WebviewViewProvid
 <!-- Header -->
 <div class="header">
   <span class="header-icon">⚡</span>
-  <h1>Backend Generator</h1>
+  <h1>NodeForge</h1>
   <span class="badge">v2</span>
 </div>
 

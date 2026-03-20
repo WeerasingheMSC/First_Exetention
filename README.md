@@ -1,6 +1,6 @@
-# my-first-extension README
+# NodeForge README
 
-This is the README for your extension "my-first-extension". After writing up a brief description, we recommend including the following sections.
+This is the README for your extension "NodeForge". After writing up a brief description, we recommend including the following sections.
 
 ## Features
 

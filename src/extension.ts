@@ -789,7 +789,7 @@ function updateServerFileForAuth(content: string, exe: string, layout: Structure
 
 export function activate(context: vscode.ExtensionContext) {
 	const disposable = vscode.commands.registerCommand(
-		"my-first-extension.generateMernModule",
+		"nodeforge.generateMernModule",
 		async () => {
 			// ── 1. Collect inputs ──────────────────────────────────────────────
 
@@ -1024,7 +1024,7 @@ export function activate(context: vscode.ExtensionContext) {
 	// ─── Auth Generator Command ───────────────────────────────────────────────
 
 	const authDisposable = vscode.commands.registerCommand(
-		"my-first-extension.generateAuth",
+		"nodeforge.generateAuth",
 		async () => {
 			const rootPath = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
 			if (!rootPath) {
@@ -1138,18 +1138,18 @@ export function activate(context: vscode.ExtensionContext) {
 	// ─── Sidebar-driven: Generate Module (values come from the form) ──────────
 
 	const sidebarModuleDisposable = vscode.commands.registerCommand(
-		"my-first-extension.generateMernModuleFromSidebar",
+		"nodeforge.generateMernModuleFromSidebar",
 		async (msg: { moduleName: string; fields: string; language: string; database: string; dblink: string; port: string; structure: string }) => {
-			console.log("[BackendGen] generateMernModuleFromSidebar called", msg);
+			console.log("[NodeForge] generateMernModuleFromSidebar called", msg);
 			vscode.window.showInformationMessage(`Extension: Generating ${msg.language} module with ${msg.database}`);
 
 			const rootPath = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
 			if (!rootPath) {
-				vscode.window.showErrorMessage("BackendGen: No folder open. Please open a folder first!");
+				vscode.window.showErrorMessage("NodeForge: No folder open. Please open a folder first!");
 				sidebarProvider.postStatus("No folder open — use File → Open Folder first!", "error");
 				return;
 			}
-			console.log("[BackendGen] rootPath =", rootPath);
+			console.log("[NodeForge] rootPath =", rootPath);
 			sidebarProvider.postStatus(`Generating in: ${rootPath}`, "info");
 
 			const { moduleName, fields: fieldInput, language, database, dblink, port, structure = "simple" } = msg;
@@ -1232,11 +1232,11 @@ export function activate(context: vscode.ExtensionContext) {
 				sidebarProvider.postStatus(`✓ ${ModuleName} module files generated! See terminal for npm install progress. Run "npm run dev" once done.`, "success");
 				sidebarProvider.postBackendGenerated();
 				vscode.window.showInformationMessage(`Successfully generated ${ModuleName} module files! Check the terminal down below.`);
-				console.log("[BackendGen] Done — terminal opened for npm install");
+				console.log("[NodeForge] Done — terminal opened for npm install");
 			} catch (err) {
-				console.error("[BackendGen] Error:", err);
+				console.error("[NodeForge] Error:", err);
 				const errorMsg = (err as Error).message || String(err);
-				vscode.window.showErrorMessage(`BackendGen Error: ${errorMsg}`);
+				vscode.window.showErrorMessage(`NodeForge Error: ${errorMsg}`);
 				sidebarProvider.postStatus(`Error: ${errorMsg}`, "error");
 			}
 		}
@@ -1245,14 +1245,14 @@ export function activate(context: vscode.ExtensionContext) {
 	// ─── Sidebar-driven: Generate Auth (values come from the form) ────────────
 
 	const sidebarAuthDisposable = vscode.commands.registerCommand(
-		"my-first-extension.generateAuthFromSidebar",
+		"nodeforge.generateAuthFromSidebar",
 		async (msg: { language: string }) => {
-			console.log("[BackendGen] generateAuthFromSidebar called", msg);
+			console.log("[NodeForge] generateAuthFromSidebar called", msg);
 			vscode.window.showInformationMessage(`Extension: Generating ${msg.language} Auth`);
 
 			const rootPath = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
 			if (!rootPath) {
-				vscode.window.showErrorMessage("BackendGen: No folder open. Please open a folder first!");
+				vscode.window.showErrorMessage("NodeForge: No folder open. Please open a folder first!");
 				sidebarProvider.postStatus("No folder open — use File → Open Folder first!", "error");
 				return;
 			}
@@ -1320,18 +1320,18 @@ export function activate(context: vscode.ExtensionContext) {
 
 				sidebarProvider.postStatus("✓ Auth files generated and routes mounted! See terminal for npm install.", "success");
 				vscode.window.showInformationMessage("Auth generated and mounted! Check terminal.");
-				console.log("[BackendGen] Auth done — terminal opened");
+				console.log("[NodeForge] Auth done — terminal opened");
 			} catch (err) {
-				console.error("[BackendGen] Auth error:", err);
+				console.error("[NodeForge] Auth error:", err);
 				const errorMsg = (err as Error).message || String(err);
-				vscode.window.showErrorMessage(`BackendGen Auth Error: ${errorMsg}`);
+				vscode.window.showErrorMessage(`NodeForge Auth Error: ${errorMsg}`);
 				sidebarProvider.postStatus(`Error: ${errorMsg}`, "error");
 			}
 		}
 	);
 
 	const openSidebarDisposable = vscode.commands.registerCommand(
-		"my-first-extension.openSidebar",
+		"nodeforge.openSidebar",
 		() => {
 			vscode.commands.executeCommand("backendGeneratorSidebar.focus");
 		}
@@ -1340,14 +1340,14 @@ export function activate(context: vscode.ExtensionContext) {
 	// ─── Sidebar-driven: Generate Full Backend ────────────────────────────────
 
 	const fullBackendDisposable = vscode.commands.registerCommand(
-		"my-first-extension.generateFullBackendFromSidebar",
+		"nodeforge.generateFullBackendFromSidebar",
 		async (msg: { moduleName: string; fields: string; language: string; database: string; dblink: string; port: string }) => {
-			console.log("[BackendGen] generateFullBackendFromSidebar called", msg);
-			vscode.window.showInformationMessage("Backend Generator: Building full Advanced-structure backend...");
+			console.log("[NodeForge] generateFullBackendFromSidebar called", msg);
+			vscode.window.showInformationMessage("NodeForge: Building full Advanced-structure backend...");
 
 			const rootPath = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
 			if (!rootPath) {
-				vscode.window.showErrorMessage("BackendGen: No folder open. Please open a folder first!");
+				vscode.window.showErrorMessage("NodeForge: No folder open. Please open a folder first!");
 				sidebarProvider.postStatus("No folder open — use File → Open Folder first!", "error");
 				return;
 			}
@@ -1449,9 +1449,9 @@ export function activate(context: vscode.ExtensionContext) {
 				sidebarProvider.postBackendGenerated();
 				vscode.window.showInformationMessage(`🚀 Full backend (Advanced) generated for ${ModuleName}!`);
 			} catch (err) {
-				console.error("[BackendGen] Full backend error:", err);
+				console.error("[NodeForge] Full backend error:", err);
 				const errorMsg = (err as Error).message || String(err);
-				vscode.window.showErrorMessage(`BackendGen Error: ${errorMsg}`);
+				vscode.window.showErrorMessage(`NodeForge Error: ${errorMsg}`);
 				sidebarProvider.postStatus(`Error: ${errorMsg}`, "error");
 			}
 		}
@@ -1460,13 +1460,13 @@ export function activate(context: vscode.ExtensionContext) {
 	// ─── Sidebar-driven: Add Module to existing backend ──────────────────────
 
 	const addModuleDisposable = vscode.commands.registerCommand(
-		"my-first-extension.addModuleToBackend",
+		"nodeforge.addModuleToBackend",
 		async (msg: { moduleName: string; fields: string }) => {
-			console.log("[BackendGen] addModuleToBackend called", msg);
+			console.log("[NodeForge] addModuleToBackend called", msg);
 
 			const rootPath = vscode.workspace.workspaceFolders?.[0].uri.fsPath;
 			if (!rootPath) {
-				vscode.window.showErrorMessage("BackendGen: No folder open!");
+				vscode.window.showErrorMessage("NodeForge: No folder open!");
 				sidebarProvider.postStatus("No folder open — use File → Open Folder first!", "error");
 				return;
 			}
@@ -1525,9 +1525,9 @@ export function activate(context: vscode.ExtensionContext) {
 				sidebarProvider.postStatus(`✓ Module ${ModuleName} added! model, controller, routes created and server updated.`, "success");
 				vscode.window.showInformationMessage(`✅ Module ${ModuleName} added to your backend!`);
 			} catch (err) {
-				console.error("[BackendGen] addModule error:", err);
+				console.error("[NodeForge] addModule error:", err);
 				const errorMsg = (err as Error).message || String(err);
-				vscode.window.showErrorMessage(`BackendGen Error: ${errorMsg}`);
+				vscode.window.showErrorMessage(`NodeForge Error: ${errorMsg}`);
 				sidebarProvider.postStatus(`Error: ${errorMsg}`, "error");
 			}
 		}
