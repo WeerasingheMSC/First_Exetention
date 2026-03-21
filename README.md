@@ -6,8 +6,22 @@ NodeForge is the ultimate productivity companion for backend developers. It tran
 
 With a powerful **Interactive Sidebar**, NodeForge puts the power of complex scaffolding directly at your fingertips. Choose your language, your database, and your architectural patterns with a single click.
 
-![Demo](https://github.com/WeerasingheMSC/First_Exetention/blob/74376e2013acdb0b59acad6656abbfdba2081994/Untitled%20design%20(3).gif)
+![Demo](https://raw.githubusercontent.com/WeerasingheMSC/First_Exetention/74376e2013acdb0b59acad6656abbfdba2081994/Untitled%20design%20(3).gif)
 
+---
+
+## What Makes NodeForge Different
+ 
+| Feature | NodeForge | Basic snippet tools |
+|---|---|---|
+| Full project scaffold | ✅ | ❌ |
+| JWT Auth generation | ✅ | ❌ |
+| Multi-DB support (Mongo, MySQL, Postgres) | ✅ | ❌ |
+| JS + TypeScript | ✅ | Partial |
+| Auto-detects existing project & patches server | ✅ | ❌ |
+| 3 folder architecture presets | ✅ | ❌ |
+| Interactive sidebar UI | ✅ | ❌ |
+ 
 ---
 
 ### 🚀 Core Features
@@ -21,7 +35,7 @@ With a powerful **Interactive Sidebar**, NodeForge puts the power of complex sca
 
 ---
 
-### 🎨 Visual Guide & Interactive Sidebar
+### Visual Guide & Interactive Sidebar
 
 #### 1. Module Section (New Projects)
 Perfect for starting a specific entity from scratch. This section allows you to define the DNA of your new project.
@@ -64,7 +78,7 @@ The smartest feature in NodeForge. It reads your current workspace to understand
 
 ---
 
-### ⚒️ How to Use
+### How to Use
 1.  Open the **NodeForge** icon in the Activity Bar.
 2.  Choose your generation mode (Module, Auth, Full, or Add).
 3.  Fill in your details and hit **Generate**.
@@ -72,9 +86,63 @@ The smartest feature in NodeForge. It reads your current workspace to understand
 
 ---
 
-### 🙌 Thank You!
-Thank you for choosing **NodeForge** to power your development workflow. We built this to save you from the "boring stuff" so you can focus on building the features that matter. 
+ 
+## What Gets Generated (Example: Full Backend, TypeScript, MongoDB, Advanced)
+ 
+```
+├── src/
+│   ├── config/
+│   │   └── db.ts               ← Mongoose connection
+│   ├── models/
+│   │   ├── Product.ts          ← Your entity model
+│   │   └── User.ts             ← Auth user model (bcrypt)
+│   ├── controllers/
+│   │   ├── product.controller.ts
+│   │   └── auth.controller.ts  ← register / login / getMe
+│   ├── routes/
+│   │   ├── product.routes.ts
+│   │   └── auth.routes.ts
+│   ├── middleware/
+│   │   └── auth.middleware.ts  ← JWT verification
+│   └── utils/
+├── server.ts                   ← Fully wired entry point
+├── .env                        ← PORT, DB_URI, JWT_SECRET
+└── tsconfig.json
+```
+ 
+---
+ 
+## Requirements
+ 
+- **VS Code** 1.75 or later
+- **Node.js** 16 or later
+- **npm** installed and accessible on your `PATH`
+ 
+---
+ 
+## Known Limitations
+ 
+- The **Add** module feature requires a workspace folder to be open.
+- `Full Backend` always uses the **Advanced** (`src/`) folder layout.
+- Field types are limited to `string`, `number`, `boolean`, and `date`.
+ 
+---
+ 
+## Release Notes
+ 
+### 1.0.0
+- Initial release with Module, Auth, Full Backend, and Add Module generation.
+- Support for MongoDB (Mongoose), MySQL, and PostgreSQL.
+- JavaScript and TypeScript output.
+- Smart project auto-detection for the Add tab.
+ 
+---
+ 
+## 🙌 Contributing & Feedback
+ 
+Found a bug or have a feature request? [Open an issue on GitHub](https://github.com/WeerasingheMSC/First_Exetention/issues).
+ 
+If NodeForge saves you time, please consider leaving a ⭐ review on the Marketplace — it helps other developers find the extension.
+ 
+**Happy Coding! 🚀**
 
-If you find this extension helpful, please consider leaving a review on the Marketplace!
-
-**Happy Coding!** 🚀
