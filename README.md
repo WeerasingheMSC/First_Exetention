@@ -6,6 +6,8 @@ NodeForge is the ultimate productivity companion for backend developers. It tran
 
 With a powerful **Interactive Sidebar**, NodeForge puts the power of complex scaffolding directly at your fingertips. Choose your language, your database, and your architectural patterns with a single click.
 
+https://private-user-images.githubusercontent.com/179555985/567273254-4668f0cd-2b69-4fc2-908f-b9987963a41a.mov?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NzQwOTg3MTksIm5iZiI6MTc3NDA5ODQxOSwicGF0aCI6Ii8xNzk1NTU5ODUvNTY3MjczMjU0LTQ2NjhmMGNkLTJiNjktNGZjMi05MDhmLWI5OTg3OTYzYTQxYS5tb3Y_WC1BbXotQWxnb3JpdGhtPUFXUzQtSE1BQy1TSEEyNTYmWC1BbXotQ3JlZGVudGlhbD1BS0lBVkNPRFlMU0E1M1BRSzRaQSUyRjIwMjYwMzIxJTJGdXMtZWFzdC0xJTJGczMlMkZhd3M0X3JlcXVlc3QmWC1BbXotRGF0ZT0yMDI2MDMyMVQxMzA2NTlaJlgtQW16LUV4cGlyZXM9MzAwJlgtQW16LVNpZ25hdHVyZT1hNDFkZTE1NTQyYzQ3YTliYjJmN2IwZTM3MWY5ZjVkYzRiZjc3NGIyOWU2OWY0YzJlOTkxOWEzNzQ1YzZhZDFiJlgtQW16LVNpZ25lZEhlYWRlcnM9aG9zdCJ9.F0G--padXIJepW46wZvU8ANaKz0e7d1rNLkpj_OS7iA
+
 ---
 
 ### 🚀 Core Features
@@ -21,12 +23,10 @@ With a powerful **Interactive Sidebar**, NodeForge puts the power of complex sca
 
 ### 🎨 Visual Guide & Interactive Sidebar
 
-> **Recommended Asset:** *Place a GIF here showing you filling out the form and clicking "Generate". Seeing the folders pop into existence in the sidebar is the most "impressive" visual.*
-
 #### 1. Module Section (New Projects)
 Perfect for starting a specific entity from scratch. This section allows you to define the DNA of your new project.
 
-![image alt](https://github.com/WeerasingheMSC/First_Exetention/blob/f8d16ce281346052c623417e40903b649b2bd2da/Screenshot%202026-03-21%20at%2013.14.07.png)
+![image alt](https://raw.githubusercontent.com/WeerasingheMSC/First_Exetention/f8d16ce281346052c623417e40903b649b2bd2da/Screenshot%202026-03-21%20at%2013.14.07.png)
 
 *   **Module Name**: Name your entity (e.g., `Product`, `Order`).
 *   **Fields**: Define your schema in a simple string (`name:string, price:number`).
@@ -41,14 +41,14 @@ Perfect for starting a specific entity from scratch. This section allows you to 
 #### 2. Auth Section (Secure your App)
 Easily add a security layer to any existing project.
 
-![image alt](https://github.com/WeerasingheMSC/First_Exetention/blob/e5b85832e42ccb5137193b7a9fba470050be5c5c/Screenshot%202026-03-21%20at%2013.14.39.png)
+![image alt](https://raw.githubusercontent.com/WeerasingheMSC/First_Exetention/e5b85832e42ccb5137193b7a9fba470050be5c5c/Screenshot%202026-03-21%20at%2013.14.39.png)
 
 *   **Language Selection**: Just pick your project's language, and NodeForge will write the `bcrypt` and `jsonwebtoken` logic for you, including specialized middleware and .env configuration.
 
 #### 3. Full Backend Section (The Powerhouse)
 Need a complete API with security out of the box? This generates the "Gold Standard" advanced backend.
 
-![image alt](https://github.com/WeerasingheMSC/First_Exetention/blob/e5b85832e42ccb5137193b7a9fba470050be5c5c/Screenshot%202026-03-21%20at%2013.14.57.png)
+![image alt](https://raw.githubusercontent.com/WeerasingheMSC/First_Exetention/e5b85832e42ccb5137193b7a9fba470050be5c5c/Screenshot%202026-03-21%20at%2013.14.57.png)
 
 *   **Module Name & Fields**: Set up your primary entity.
 *   **Database Choice**: Pick your engine.
@@ -57,7 +57,7 @@ Need a complete API with security out of the box? This generates the "Gold Stand
 #### 4. Add Section (The Scalability Tool)
 The smartest feature in NodeForge. It reads your current workspace to understand how you code.
 
-![image alt](https://github.com/WeerasingheMSC/First_Exetention/blob/e5b85832e42ccb5137193b7a9fba470050be5c5c/Screenshot%202026-03-21%20at%2013.15.15.png)
+![image alt](https://raw.githubusercontent.com/WeerasingheMSC/First_Exetention/e5b85832e42ccb5137193b7a9fba470050be5c5c/Screenshot%202026-03-21%20at%2013.15.15.png)
 
 *   **Auto-Detection**: It figures out if you are using TypeScript or JS, which database driver is installed, and where your folders are.
 *   **Zero-Config Update**: It generates the files and **patches your server file** so the new routes are immediately live.
