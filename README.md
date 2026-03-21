@@ -140,7 +140,7 @@ The smartest feature in NodeForge. It reads your current workspace to understand
  
 ## 🙌 Contributing & Feedback
  
-Found a bug or have a feature request? [Open an issue on GitHub](https://github.com/WeerasingheMSC/First_Exetention/issues).
+Found a bug or have a feature request? [Open an issue on GitHub](https://github.com/WeerasingheMSC/First_Exetention/issues) or [Gmail](sahanchampathi2001ugc@gmail.com)
  
 If NodeForge saves you time, please consider leaving a ⭐ review on the Marketplace — it helps other developers find the extension.
  
