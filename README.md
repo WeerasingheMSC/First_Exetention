@@ -41,10 +41,14 @@ Perfect for starting a specific entity from scratch. This section allows you to 
 #### 2. Auth Section (Secure your App)
 Easily add a security layer to any existing project.
 
+![image alt](https://github.com/WeerasingheMSC/First_Exetention/blob/e5b85832e42ccb5137193b7a9fba470050be5c5c/Screenshot%202026-03-21%20at%2013.14.39.png)
+
 *   **Language Selection**: Just pick your project's language, and NodeForge will write the `bcrypt` and `jsonwebtoken` logic for you, including specialized middleware and .env configuration.
 
 #### 3. Full Backend Section (The Powerhouse)
 Need a complete API with security out of the box? This generates the "Gold Standard" advanced backend.
+
+![image alt](https://github.com/WeerasingheMSC/First_Exetention/blob/e5b85832e42ccb5137193b7a9fba470050be5c5c/Screenshot%202026-03-21%20at%2013.14.57.png)
 
 *   **Module Name & Fields**: Set up your primary entity.
 *   **Database Choice**: Pick your engine.
@@ -52,6 +56,8 @@ Need a complete API with security out of the box? This generates the "Gold Stand
 
 #### 4. Add Section (The Scalability Tool)
 The smartest feature in NodeForge. It reads your current workspace to understand how you code.
+
+![image alt](https://github.com/WeerasingheMSC/First_Exetention/blob/e5b85832e42ccb5137193b7a9fba470050be5c5c/Screenshot%202026-03-21%20at%2013.15.15.png)
 
 *   **Auto-Detection**: It figures out if you are using TypeScript or JS, which database driver is installed, and where your folders are.
 *   **Zero-Config Update**: It generates the files and **patches your server file** so the new routes are immediately live.
