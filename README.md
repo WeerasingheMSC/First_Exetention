@@ -1,71 +1,72 @@
-# NodeForge README
+# NodeForge ⚡
 
-This is the README for your extension "NodeForge". After writing up a brief description, we recommend including the following sections.
+**Stop writing boilerplate. Start building products.**
 
-## Features
+NodeForge is the ultimate productivity companion for backend developers. It transforms hours of repetitive setup into seconds of automated generation. Whether you are bootstrapping a fresh project or scaling an existing one, NodeForge builds high-quality, professional-grade Node.js/Express layers tailored to your specific architecture.
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
-
-## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
-
-## Extension Settings
-
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
+With a powerful **Interactive Sidebar**, NodeForge puts the power of complex scaffolding directly at your fingertips. Choose your language, your database, and your architectural patterns with a single click.
 
 ---
 
-## Following extension guidelines
+### 🚀 Core Features
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+*   **Full Managed Scaffolding**: Generate an entire production-ready backend in seconds.
+*   **Multi-Database Support**: Seamless integration for **MongoDB (Mongoose)**, **MySQL (mysql2)**, and **Postgres (pg)**.
+*   **Bilingual Base**: Native support for both **JavaScript** and **TypeScript** (including automatic type definition installs).
+*   **JWT Authentication**: One-click generation of Secure Auth modules (User Model, Controllers, Middleware, and Route protection).
+*   **Smart "Add Module" Logic**: Already have a project? NodeForge **auto-detects** your existing language, database, and folder structure to inject new CRUD modules and update your `server.ts` or `server.js` automatically.
+*   **Custom Environments**: Configure Ports, Connection Strings, and 3 different Folder Architecture layouts.
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+---
 
-## Working with Markdown
+### 🎨 Visual Guide & Interactive Sidebar
 
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
+> **Recommended Asset:** *Place a GIF here showing you filling out the form and clicking "Generate". Seeing the folders pop into existence in the sidebar is the most "impressive" visual.*
 
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
+#### 1. Module Section (New Projects)
+Perfect for starting a specific entity from scratch. This section allows you to define the DNA of your new project.
 
-## For more information
+*   **Module Name**: Name your entity (e.g., `Product`, `Order`).
+*   **Fields**: Define your schema in a simple string (`name:string, price:number`).
+*   **Language**: Select between `JavaScript` or `TypeScript`.
+*   **Connection URI**: Input your DB string (e.g., `mongodb://localhost:27017/mydb`).
+*   **Port**: Define your server's resting port.
+*   **Folder Structure**: Choose how your code is organized:
+    *   **Simple**: Flat structure for small APIs.
+    *   **Advanced**: Clean `src/` layout with separated concerns.
+    *   **Clean Architecture**: Enterprise-ready separation of Presentation, Domain, and Data.
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
+#### 2. Auth Section (Secure your App)
+Easily add a security layer to any existing project.
 
-**Enjoy!**
+*   **Language Selection**: Just pick your project's language, and NodeForge will write the `bcrypt` and `jsonwebtoken` logic for you, including specialized middleware and .env configuration.
+
+#### 3. Full Backend Section (The Powerhouse)
+Need a complete API with security out of the box? This generates the "Gold Standard" advanced backend.
+
+*   **Module Name & Fields**: Set up your primary entity.
+*   **Database Choice**: Pick your engine.
+*   **Result**: Generates the Module + User Auth + JWT protection + Server Auto-configuration in an **Advanced (/src)** layout.
+
+#### 4. Add Section (The Scalability Tool)
+The smartest feature in NodeForge. It reads your current workspace to understand how you code.
+
+*   **Auto-Detection**: It figures out if you are using TypeScript or JS, which database driver is installed, and where your folders are.
+*   **Zero-Config Update**: It generates the files and **patches your server file** so the new routes are immediately live.
+
+---
+
+### ⚒️ How to Use
+1.  Open the **NodeForge** icon in the Activity Bar.
+2.  Choose your generation mode (Module, Auth, Full, or Add).
+3.  Fill in your details and hit **Generate**.
+4.  Run `npm install` and `npm run dev` in the terminal that pops up!
+
+---
+
+### 🙌 Thank You!
+Thank you for choosing **NodeForge** to power your development workflow. We built this to save you from the "boring stuff" so you can focus on building the features that matter. 
+
+If you find this extension helpful, please consider leaving a review on the Marketplace!
+
+**Happy Coding!** 🚀

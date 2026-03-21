@@ -2,6 +2,7 @@
   "name": "node-forge",
   "displayName": "NodeForge",
   "description": "Generate full Node.js/Express backends with one click — MongoDB, MySQL, PostgreSQL, TypeScript/JavaScript, JWT Auth",
+  "publisher": "SahanCW",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.109.0"
