@@ -26,6 +26,8 @@ With a powerful **Interactive Sidebar**, NodeForge puts the power of complex sca
 #### 1. Module Section (New Projects)
 Perfect for starting a specific entity from scratch. This section allows you to define the DNA of your new project.
 
+![image alt](https://github.com/WeerasingheMSC/First_Exetention/blob/f8d16ce281346052c623417e40903b649b2bd2da/Screenshot%202026-03-21%20at%2013.14.07.png)
+
 *   **Module Name**: Name your entity (e.g., `Product`, `Order`).
 *   **Fields**: Define your schema in a simple string (`name:string, price:number`).
 *   **Language**: Select between `JavaScript` or `TypeScript`.
